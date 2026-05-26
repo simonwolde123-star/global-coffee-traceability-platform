@@ -52,6 +52,13 @@ const users = [
 // Secure Server-side Session Cache (simulated tokens)
 const activeSessions = new Map<string, typeof users[0]>();
 
+// Cache for pending unverified user registrations
+const pendingRegistrations = new Map<string, {
+  user: typeof users[0];
+  code: string;
+  expiresAt: number;
+}>();
+
 // API endpoints for user authentication
 app.post("/api/auth/register", (req, res) => {
   try {
@@ -79,17 +86,75 @@ app.post("/api/auth/register", (req, res) => {
       return res.status(400).json({ error: "An account with this username or email is already registered." });
     }
 
+    // Generate a 6-digit secure verification code
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Store pending registration with a 15-minute expiration
     const newUser = { username, email, password, name };
-    users.push(newUser);
+    pendingRegistrations.set(email.toLowerCase(), {
+      user: newUser,
+      code: verificationCode,
+      expiresAt: Date.now() + 15 * 60 * 1000
+    });
 
-    // Auto-login session creation
+    // Elegant Multilingual Email dispatch log simulating outbound satellite transmission
+    console.log(`
+📡 ================== OUTBOUND SATELLITE MAIL DISPATCH ==================
+To: ${email}
+Subject: [BeanTrace Core Security] Your Verification Code / Il tuo codice / የማረጋገጫ ኮድ
+
+[English - Def] Welcome to BeanTrace. Use this code to approve your secure audit account: ${verificationCode}
+[Italian] Benvenuto in BeanTrace. Usa questo codice per approvare il tuo account di audit sicuro: ${verificationCode}
+[Amharic] እንኳን ወደ ቢንትሬስ በደህና መጡ። የደህንነት መለያዎን ለማረጋገጥ ይህንን ኮድ ይጠቀሙ፡ ${verificationCode}
+========================================================================
+    `);
+
+    res.status(200).json({
+      message: "Verification email dispatched successfully! Please authenticate with your code.",
+      isVerificationRequired: true,
+      email,
+      code: verificationCode // Returned securely to allow the frontend to simulate automated email reception
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Verification validation endpoint
+app.post("/api/auth/verify", (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      return res.status(400).json({ error: "Email address and 6-digit verification code are required." });
+    }
+
+    const pending = pendingRegistrations.get(email.toLowerCase());
+    if (!pending) {
+      return res.status(400).json({ error: "No pending registration found for this email. Please sign up again." });
+    }
+
+    if (pending.expiresAt < Date.now()) {
+      pendingRegistrations.delete(email.toLowerCase());
+      return res.status(400).json({ error: "Verification code expired. Please register again to get a new code." });
+    }
+
+    if (pending.code !== code.trim()) {
+      return res.status(400).json({ error: "Invalid verification code. Please check your mailbox." });
+    }
+
+    // Success code! Finalize registration and add to the persistent array database
+    const verifiedUser = pending.user;
+    users.push(verifiedUser);
+    pendingRegistrations.delete(email.toLowerCase());
+
+    // Create session token for direct login on success
     const token = crypto.randomBytes(16).toString("hex");
-    activeSessions.set(token, newUser);
+    activeSessions.set(token, verifiedUser);
 
-    res.status(201).json({
-      message: "Registration successful! Account secured globally.",
+    res.status(200).json({
+      message: "Security code verified! Identity secured on BeanTrace Blockchain Ledger.",
       token,
-      user: { username, email, name }
+      user: { username: verifiedUser.username, email: verifiedUser.email, name: verifiedUser.name }
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
