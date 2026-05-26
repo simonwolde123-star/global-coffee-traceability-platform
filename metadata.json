@@ -1,0 +1,6 @@
+{
+  "name": "Origina Traceability Platform",
+  "description": "Global coffee traceability, farm management, and fair-trade blockchain auditing platform for worldwide coffee cooperatives.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
