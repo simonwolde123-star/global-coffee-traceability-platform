@@ -1,683 +1,527 @@
 <div align="center">
 
-# ☕ Global Coffee Traceability Platform
+<img src="https://capsule-render.vercel.app/api?type=venom&color=0:1B0F0A,50:4E342E,100:C69C6D&height=260&section=header&text=Global%20Coffee%20Traceability&fontSize=52&fontColor=FFF8E7&animation=twinkling&fontAlignY=38&desc=Intelligent%20Infrastructure%20for%20Transparent%20Coffee%20Supply%20Chains&descSize=17&descAlignY=60" alt="Global Coffee Traceability Platform" />
 
-### Intelligent Infrastructure for Transparent Coffee Supply Chains
+<a href="#">
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=500&size=20&pause=1100&color=C69C6D&center=true&vCenter=true&width=820&lines=Farm+%E2%86%92+Data+%E2%86%92+Intelligence+%E2%86%92+Trust+%E2%86%92+Cup;Traceability+%7C+Blockchain+%7C+AI+%7C+GIS+%7C+Analytics;Every+coffee+has+an+origin.+Every+batch+has+a+journey.;Offline-first.+Multilingual.+Verifiable." alt="Typing animation" />
+</a>
 
-**Traceability • Farm Management • Blockchain • AI • Geospatial Intelligence • Analytics**
+<br/><br/>
 
-A scalable digital platform designed to connect coffee producers, cooperatives,
-processing facilities, exporters, buyers, roasters, and consumers through
-trusted data and intelligent technology.
+![Status](https://img.shields.io/badge/Status-Active%20Development-C69C6D?style=for-the-badge)
+![Domain](https://img.shields.io/badge/Domain-AgTech%20%C2%B7%20Supply%20Chain-4E342E?style=for-the-badge)
+![Architecture](https://img.shields.io/badge/Architecture-Web%20%2B%20Cloud%20%2B%20AI%20%2B%20GIS%20%2B%20Blockchain-1B0F0A?style=for-the-badge)
+
+![React](https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB)
+![Next.js](https://img.shields.io/badge/Next.js-000?style=flat-square&logo=nextdotjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Tailwind](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat-square&logo=nodedotjs&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white)
+![TensorFlow](https://img.shields.io/badge/TensorFlow-FF6F00?style=flat-square&logo=tensorflow&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
+
+**[Vision](#-vision)** · **[Platform Modules](#-platform-modules)** · **[Architecture](#-system-architecture)** · **[Blockchain Layer](#-blockchain-verification-layer)** · **[Roadmap](#-roadmap)** · **[Status](#-project-status)**
 
 </div>
 
 ---
 
-## 01 // Overview
+## 🎯 Vision
 
-The **Global Coffee Traceability Platform** is a full-stack software engineering project focused on modernizing how coffee production and supply-chain information is collected, managed, analyzed, and verified.
+A coffee batch passes through producers, washing stations, cooperatives, exporters, logistics providers, importers, buyers and roasters before it reaches a cup. Each actor keeps its own records, and the history rarely survives the journey.
 
-The system is designed around the complete coffee lifecycle:
+The **Global Coffee Traceability Platform** is a full-stack engineering project that creates a **unified digital layer** across that chain. It gives every batch a durable digital identity that preserves origin, production history, processing data, quality results and custody events, and makes them verifiable.
+
+```mermaid
+flowchart LR
+    P[🌱 Producer] --> F[Farm] --> H[Harvest] --> B[Coffee Batch]
+    B --> PS[Processing Station] --> C[Cooperative] --> E[Exporter]
+    E --> L[International Logistics] --> BR[Buyer / Roaster] --> CO[☕ Consumer]
+```
+
+### Engineering Principles
+
+| Principle | Meaning |
+|---|---|
+| **Transparency** | Trace coffee across its full lifecycle |
+| **Integrity** | Maintain reliable, historical records |
+| **Accessibility** | Support international, multilingual users |
+| **Intelligence** | Turn operational data into insight |
+| **Scalability** | Design for multiple regions and organizations |
+| **Interoperability** | Integrate cleanly with external systems |
+
+---
+
+## 🧩 Platform Modules
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### 🌱 Farm Management
+Farmers, farms, cooperatives, GPS, altitude, harvest seasons, varieties and production history. **The farm is the first digital node of the chain.**
+
+</td>
+<td width="33%" valign="top">
+
+### 🔎 Traceability Engine
+Unique batch identity linked to producer, origin, processing, quality, events, certifications, QR identity and verification records.
+
+</td>
+<td width="33%" valign="top">
+
+### ⛓️ Blockchain Verification
+Hash-anchored, independently verifiable events for integrity-sensitive steps in the chain.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 📱 QR Traceability
+Scan the coffee, understand its origin, follow its journey through a public traceability endpoint.
+
+</td>
+<td valign="top">
+
+### 🏭 Processing and Cooperatives
+Member management, washing stations, intake, lot creation, grading, cupping records and production aggregation.
+
+</td>
+<td valign="top">
+
+### 🗺️ Geospatial Intelligence
+Map farms, producers, washing stations, cooperatives, regions and supply-chain locations.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 🤖 AI and Agricultural Intelligence
+Crop-health analysis, disease-detection support, yield analysis, forecasting and anomaly detection.
+
+</td>
+<td valign="top">
+
+### 📊 Analytics and Decision Support
+Production, quality, logistics, sustainability and geographic dashboards for every stakeholder.
+
+</td>
+<td valign="top">
+
+### 🤝 Specialty Coffee and B2B
+Producer-buyer connections, market information, coffee events, education and digital sourcing workflows.
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🔎 Traceability Model
+
+Each batch is the center of a connected record graph.
+
+```mermaid
+flowchart TB
+    BATCH((Coffee Batch))
+    BATCH --- PR[Producer]
+    BATCH --- FA[Farm]
+    BATCH --- GO[Geographic Origin]
+    BATCH --- VA[Variety]
+    BATCH --- HA[Harvest]
+    BATCH --- PM[Processing Method]
+    BATCH --- PF[Processing Facility]
+    BATCH --- QD[Quality Data]
+    BATCH --- SE[Supply Chain Events]
+    BATCH --- CE[Certifications]
+    BATCH --- QR[QR Identity]
+    BATCH --- VR[Verification Records]
+```
+
+**Reporting flow:** `ORIGIN → HARVEST → PROCESSING → QUALITY → EXPORT → LOGISTICS → BUYER → ROASTER → MARKET`
+
+---
+
+## ⛓️ Blockchain Verification Layer
+
+Blockchain here is a **verification layer, not a replacement for the operational database.** Large operational datasets stay in conventional storage, and only integrity-sensitive events are anchored for independent verification.
+
+```mermaid
+flowchart TB
+    APP[Application] --> DB[(Operational Database<br/>Farm records · Users · Quality data<br/>Certificates · Documents)]
+    APP --> BC[Blockchain Verification<br/>Data hashes · Timestamps<br/>Transaction IDs · Ownership events]
+    DB -. hash of record .-> BC
+```
+
+<details>
+<summary><b>Candidate on-chain events</b></summary>
+
+<br/>
 
 ```text
-Producer
-   │
-   ▼
-Farm
-   │
-   ▼
-Harvest
-   │
-   ▼
-Coffee Batch
-   │
-   ▼
-Processing Station
-   │
-   ▼
-Cooperative
-   │
-   ▼
-Exporter
-   │
-   ▼
-International Supply Chain
-   │
-   ▼
-Buyer / Roaster
-   │
-   ▼
-Consumer
-
-
-Rather than treating traceability as a simple product-tracking feature, the platform combines:
-
-Coffee batch traceability
-Farm and producer management
-Supply-chain event tracking
-QR-based product verification
-Geospatial intelligence
-Blockchain-ready verification
-Agricultural analytics
-AI-assisted decision support
-Role-based access control
-Multilingual interfaces
-Mobile and offline-first concepts
-
-Engineering objective: Build a digital identity for coffee that can preserve its origin, production history, processing information, quality data, and movement through the supply chain.
-
-
-
-02 // System Vision
-
-Coffee supply chains involve multiple independent actors and information systems.
-
-A single batch may move through producers, washing stations, cooperatives, exporters, logistics providers, importers, buyers, and roasters before reaching the final market.
-
-The platform is designed to create a unified digital layer connecting those processes.
-
-Core Engineering Principles
-TRANSPARENCY     → Trace coffee across its lifecycle
-INTEGRITY        → Maintain reliable historical records
-ACCESSIBILITY    → Support international and multilingual users
-INTELLIGENCE     → Transform operational data into insights
-SCALABILITY      → Design for multiple regions and organizations
-INTEROPERABILITY → Support integration with external systems
-
-03 // Core Platform Modules
-🌱 Farm Management
-
-A centralized environment for managing producers, farms, agricultural locations, harvests, and production information.
-
-Capabilities
-Farmer registration
-Farm registration
-Cooperative membership
-GPS coordinates
-Altitude and origin information
-Harvest-season management
-Production records
-Coffee varieties
-Farm performance analytics
-Historical production information
-
-The farm acts as the first digital node in the traceability chain.
-
-04 // Coffee Traceability Engine
-
-The traceability engine provides a structured history of coffee from production to market.
-
-Traceability Model
-
-Each coffee batch receives a unique identity linked to:
-Batch
-├── Producer
-├── Farm
-├── Geographic Origin
-├── Coffee Variety
-├── Harvest
-├── Processing Method
-├── Processing Facility
-├── Quality Data
-├── Supply Chain Events
-├── Certifications
-├── QR Identity
-└── Verification Records
-
-Traceability Reporting
-
-The traceability report is designed to provide a consolidated view of a coffee batch and its recorded lifecycle.
-ORIGIN
-   ↓
-HARVEST
-   ↓
-PROCESSING
-   ↓
-QUALITY
-   ↓
-EXPORT
-   ↓
-LOGISTICS
-   ↓
-BUYER
-   ↓
-ROASTER
-   ↓
-MARKET
-05 // Blockchain Verification Layer
-
-The architecture is designed to support blockchain-based verification for selected traceability events.
-
-Blockchain is treated as a verification layer, rather than a replacement for the application's operational database.
-
-Architecture Concept
-                         ┌──────────────────────┐
-                         │     Application      │
-                         └──────────┬───────────┘
-                                    │
-                    ┌───────────────┴──────────────┐
-                    │                              │
-                    ▼                              ▼
-           ┌─────────────────┐           ┌─────────────────┐
-           │ Operational DB  │           │   Blockchain    │
-           │                 │           │ Verification    │
-           └─────────────────┘           └─────────────────┘
-                    │                              │
-        Application information              Immutable /
-        Farm records                         verifiable events
-        Users                                Transaction IDs
-        Quality data                         Data hashes
-        Certificates                         Timestamps
-        Documents                            Ownership events
-Candidate Blockchain Events
-CREATE_BATCH
-REGISTER_PROCESSING
-TRANSFER_CUSTODY
-REGISTER_EXPORT
-REGISTER_QUALITY_RESULT
-REGISTER_ROASTING
+CREATE_BATCH             REGISTER_PROCESSING      TRANSFER_CUSTODY
+REGISTER_EXPORT          REGISTER_QUALITY_RESULT  REGISTER_ROASTING
 VERIFY_BATCH
+```
 
-This model allows large operational datasets to remain within conventional storage while selected
-integrity-sensitive events can be independently verified.
-06 // QR Traceability
+</details>
 
-Every coffee batch can be associated with a unique digital traceability endpoint.
-Physical Coffee
-      │
-      ▼
-   QR Code
-      │
-      ▼
-Batch Identifier
-      │
-      ▼
-Traceability API
-      │
-      ├──── Database Record
-      │
-      └──── Verification Record
-      │
-      ▼
-Consumer Traceability View
+---
 
-A traceability profile can provide:
+## 📱 QR Traceability Flow
 
-Producer
-Origin
-Farm
-Coffee variety
-Harvest information
-Processing method
-Quality information
-Supply-chain events
-Certification data
-Verification information
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as Consumer
+    participant Q as QR Code
+    participant A as Traceability API
+    participant D as Database
+    participant V as Verification Record
+    C->>Q: Scan coffee package
+    Q->>A: Batch identifier
+    A->>D: Fetch batch history
+    A->>V: Fetch verification proof
+    A-->>C: Origin · Farm · Variety · Processing · Quality · Events · Certifications
+```
 
-Design Philosophy
+---
 
-Scan the coffee. Understand its origin. Follow its journey.
+## 🏗️ System Architecture
 
-07 // Processing & Cooperative Operations
+```mermaid
+flowchart TB
+    subgraph CLIENT[Client Applications]
+        W[Web Application]
+        PWA[PWA]
+        M[Mobile Interface]
+    end
+    subgraph APPL[Application Layer]
+        API[REST API]
+        AUTH[Authentication and RBAC]
+        BL[Business Logic]
+    end
+    subgraph SERVICES[Platform Services]
+        AI[AI / ML Services]
+        GIS[GIS / GPS Services]
+        BCL[Blockchain Layer]
+    end
+    subgraph DATA[Data Storage]
+        PG[(PostgreSQL)]
+        OBJ[(Object Storage)]
+    end
+    CLIENT --> APPL
+    APPL --> AI
+    APPL --> GIS
+    APPL --> BCL
+    APPL --> PG
+    APPL --> OBJ
+```
 
-The system includes functionality designed around coffee-processing organizations and cooperatives.
+---
 
-Operational Capabilities
-Cooperative member management
-Washing station management
-Coffee intake
-Lot creation
-Processing-method documentation
-Coffee variety records
-Producer-to-batch relationships
-Quality grading
-Cupping records
-Production aggregation
+## 🗃️ Domain Data Model
 
-This layer connects individual farm production with larger commercial lots and downstream traceability.
+```mermaid
+erDiagram
+    USER ||--o{ FARM : manages
+    FARM ||--o{ HARVEST : produces
+    HARVEST ||--o{ BATCH : yields
+    BATCH ||--o{ PROCESSING : undergoes
+    BATCH ||--o{ QUALITY : evaluated_by
+    BATCH ||--o{ CERTIFICATION : holds
+    BATCH ||--o{ SUPPLY_CHAIN_EVENT : records
+    SUPPLY_CHAIN_EVENT ||--o| TRANSACTION : anchored_as
+    BATCH ||--|| TRACEABILITY : exposes
+```
 
-08 // Geospatial Intelligence
+---
 
-Agricultural traceability has an inherently geographic dimension.
+## 🔐 Identity, Authentication and Authorization
 
-The mapping layer is designed to visualize geographically referenced entities including:
+Multi-role access control, where each actor gets permissions matched to its responsibility in the chain.
 
-Farms
-Producers
-Washing stations
-Cooperatives
-Production regions
-Supply-chain locations
-Geospatial Data Model
+```mermaid
+flowchart TB
+    ADMIN[Administrator] --> FARMER[Farmer]
+    ADMIN --> COOP[Cooperative]
+    ADMIN --> FA[Field Agent]
+    ADMIN --> PROC[Processor]
+    ADMIN --> QI[Quality Inspector]
+    ADMIN --> EXP[Exporter]
+    ADMIN --> BUY[Buyer]
+    ADMIN --> ROA[Roaster]
+```
 
-Farm
-├── Latitude
-├── Longitude
-├── Altitude
-├── Country
-├── Region
-├── District
-└── Production Area
-Potential mapping technologies include:
+**Designed capabilities:** registration · authentication · email verification · password recovery · session management · role-based access control · protected routes · authorization checks · secure API access
 
-Google Maps
-Mapbox
-OpenStreetMap
-GeoJSON
-GPS-based field data
-09 // AI & Agricultural Intelligence
+---
 
-The AI layer is intended to move the platform beyond conventional data management.
+## 🌍 Internationalization
 
-Instead of simply storing information, the system can progressively transform agricultural and operational data into recommendations and decision-support information.
+| 🇬🇧 English | 🇮🇹 Italian | 🇪🇹 Amharic | 🌐 Future locales |
+|---|---|---|---|
+| `en` | `it` | `am` | Added through translation keys, with no redesign of core functionality |
 
-AI Domains
-Crop Intelligence
+---
 
-Crop Observation
-       ↓
-Data / Image Analysis
-       ↓
-AI Processing
-       ↓
-Risk Detection
-       ↓
-Recommendation
+## 📡 Offline-First Field Architecture
 
-Potential applications include:
+Agricultural environments cannot assume permanent connectivity.
 
-Crop-health analysis
-Disease-detection support
-Yield analysis
-Production forecasting
-Agricultural recommendations
-Operational Intelligence
-Production trend analysis
-Supply-chain analytics
-Quality insights
-Sustainability indicators
-Intelligent reporting
-Anomaly detection
-Predictive analytics
+```mermaid
+flowchart LR
+    D[Field Device] --> LC[Local Data Capture]
+    LC -->|Online| API[Cloud API]
+    LC -->|Offline| Q[Local Queue]
+    Q -->|Connection restored| SYNC[Synchronize]
+    SYNC --> API
+    API --> CB[(Cloud Backend)]
+```
 
-10 // Analytics & Decision Support
+**Targets:** responsive interface · mobile-first workflows · PWA architecture · offline data collection · post-reconnect sync · field-friendly UX
 
-The analytics layer consolidates operational information across the ecosystem.
+---
 
-Dashboard Areas
-┌───────────────────────┐
-│ Production Analytics  │
-├───────────────────────┤
-│ Farm Performance      │
-├───────────────────────┤
-│ Traceability          │
-├───────────────────────┤
-│ Quality               │
-├───────────────────────┤
-│ Supply Chain          │
-├───────────────────────┤
-│ Sustainability        │
-├───────────────────────┤
-│ Logistics             │
-├───────────────────────┤
-│ Geographic Insights   │
-└───────────────────────┘
-The objective is to convert raw operational records into useful information for farmers, cooperatives, exporters, buyers, and administrators.
+## 🛠️ Engineering Stack
 
-11 // Specialty Coffee & B2B Ecosystem
+> The stack represents the current and targeted architecture and will evolve as development progresses.
 
-The architecture also explores how traceability information can support broader coffee-industry interactions.
+| Layer | Technologies |
+|---|---|
+| **Frontend** | React · Next.js · TypeScript · Tailwind CSS |
+| **Backend** | Node.js · Express · REST APIs · Python services |
+| **Data** | PostgreSQL · NoSQL / document storage · Cloud object storage |
+| **AI / Computer Vision** | Python · TensorFlow · PyTorch · OpenCV |
+| **Geospatial** | Google Maps · Mapbox · OpenStreetMap · GeoJSON · GPS |
+| **Distributed Verification** | Blockchain · Smart contracts · Transaction verification · Data hashing |
+| **Infrastructure** | Cloud deployment · Containerized services · Environment-based config · Object storage · CDN · CI/CD |
 
-Potential modules include:
+---
 
-Specialty coffee discovery
-Producer/buyer connections
-Coffee market information
-International coffee events
-Educational resources
-Coffee expo information
-Industry updates
-Digital sourcing workflows
-12 // Identity, Authentication & Authorization
+## 🗂️ Repository Structure
 
-The application is designed around multi-role access control.
+<details>
+<summary><b>Target monorepo layout</b></summary>
 
-ADMINISTRATOR
-│
-├── FARMER
-├── COOPERATIVE
-├── FIELD AGENT
-├── PROCESSOR
-├── QUALITY INSPECTOR
-├── EXPORTER
-├── BUYER
-└── ROASTER
+<br/>
 
-Different actors can be assigned different permissions based on their responsibilities within the supply chain.
-
-Security Architecture
-
-Designed capabilities include:
-
-User registration
-Authentication
-Email verification
-Password recovery
-Session management
-Role-based access control
-Protected application routes
-Authorization checks
-Secure API access
-13 // Internationalization
-
-The project is designed for international use.
-
-Language Support
-🇬🇧 English
-🇮🇹 Italian
-🇪🇹 Amharic
-
-The interface architecture uses internationalization concepts so that additional languages can be introduced without redesigning core functionality.
-
-UI Component
-     │
-     ▼
-Translation Key
-     │
-     ├──── en
-     ├──── it
-     ├──── am
-     └──── future locales
-14 // Mobile & Offline Architecture
-
-Agricultural applications cannot assume permanent internet connectivity.
-
-The platform therefore explores an offline-capable architecture.
-FIELD DEVICE
-     │
-     ▼
-Local Data Capture
-     │
-     ├──── ONLINE ────────► Cloud API
-     │
-     └──── OFFLINE
-              │
-              ▼
-          Local Queue
-              │
-         Connection restored
-              │
-              ▼
-           Synchronize
-              │
-              ▼
-          Cloud Backend
-Target Capabilities
-Responsive interface
-Mobile-first workflows
-Progressive Web App architecture
-Offline data collection
-Synchronization after reconnection
-Field-friendly user experience
-15 // System Architecture
-┌───────────────────────────────────────────────────────────────┐
-│                     CLIENT APPLICATIONS                       │
-│                                                               │
-│        Web Application     PWA     Mobile Interface           │
-└──────────────────────────────┬────────────────────────────────┘
-                               │
-                               ▼
-┌───────────────────────────────────────────────────────────────┐
-│                       APPLICATION LAYER                       │
-│                                                               │
-│              API • Authentication • Business Logic            │
-└───┬─────────────────┬────────────────┬───────────────────┬────┘
-    │                 │                │                   │
-    ▼                 ▼                ▼                   ▼
-┌──────────┐     ┌──────────┐     ┌──────────┐      ┌──────────┐
-│ Database │     │ AI / ML  │     │ GIS / GPS│      │Blockchain│
-│          │     │ Services │     │ Services │      │ Layer    │
-└────┬─────┘     └──────────┘     └──────────┘      └──────────┘
-     │
-     ▼
-┌───────────────────────────────────────────────────────────────┐
-│                        DATA STORAGE                           │
-│                                                               │
-│ Users • Farms • Batches • Events • Quality • Documents       │
-└───────────────────────────────────────────────────────────────┘
-
-
-6 // Engineering Stack
-
-The final production stack will evolve as development progresses. Technologies listed below represent the current and targeted architecture of the project.
-
-Frontend
-React
-Next.js
-TypeScript
-Tailwind CSS
-
-Backend
-
-Node.js
-Express
-REST APIs
-Python Services
-
-Data
-
-PostgreSQL
-NoSQL / Document Storage
-Cloud Object Storage
-
-AI/Computer Vision
-Python
-TensorFlow
-PyTorch
-OpenCV
-
-Geospatial
-Google Maps
-Mapbox
-OpenStreetMap
-GeoJSON
-GPS
-
-Distributed Verification
-Blockchain
-Smart Contracts
-Transaction Verification
-Data Hashing
-
-Infrastructure
-Cloud Deployment
-Containerized Services
-Environment-Based Configuration
-Object Storage
-CDN
-CI/CD
-17 // Domain Data Model
-At a conceptual level, the platform revolves around several core entities:
-
-USER
- │
- ├──── owns / manages ────► FARM
- │                            │
- │                            ▼
- │                         HARVEST
- │                            │
- │                            ▼
- │                          BATCH
- │                            │
- │              ┌─────────────┼─────────────┐
- │              │             │             │
- │              ▼             ▼             ▼
- │          PROCESSING     QUALITY      CERTIFICATION
- │              │
- │              ▼
- │       SUPPLY_CHAIN_EVENT
- │              │
- │              ▼
- │         TRANSACTION
- │              │
- │              ▼
- └────────► TRACEABILITY
-18 // Repository Structure
-A production-oriented project structure can evolve toward:
-
+```text
 global-coffee-traceability/
-│
 ├── apps/
 │   ├── web/
 │   └── api/
-│
 ├── packages/
 │   ├── ui/
 │   ├── database/
 │   ├── blockchain/
 │   ├── i18n/
 │   └── shared/
-│
 ├── services/
 │   └── ai/
-│
 ├── contracts/
-│
 ├── docs/
 │   ├── architecture/
 │   ├── api/
 │   └── database/
-│
 ├── public/
-│
 ├── tests/
-│
 ├── .github/
 │   └── workflows/
-│
 ├── README.md
 ├── LICENSE
 └── package.json
+```
 
-19 // Development Roadmap
-Phase 01 — Platform Foundation
- Application interface
- Traceability center design
- Farm-management interface
- Processing workflows
- Operational mapping interface
- Analytics interface
- B2B concepts
- Internationalization foundation
-Phase 02 — Persistent Application Layer
- Production database
- Replace demonstration data
- Create / Read / Update / Delete operations
- Persistent farm registration
- Persistent producer records
- Persistent coffee batches
- Dynamic dashboards
- Production authentication
-Phase 03 — Traceability Engine
- Supply-chain event engine
- Dynamic batch histories
- QR generation
- Public traceability endpoint
- Quality-data integration
- Document verification
-Phase 04 — Blockchain Layer
- Smart-contract architecture
- Batch registration
- Supply-chain transaction records
- Data hashing
- Transaction verification
- Blockchain explorer integration
-Phase 05 — Intelligent Agriculture
- Crop analysis services
- Disease-detection workflow
- Predictive production analytics
- Intelligent recommendations
- AI-assisted reports
-Phase 06 — Production Engineering
- Automated testing
- CI/CD pipeline
- Monitoring
- Logging
- Security hardening
- Performance optimization
- Offline synchronization
- Production deployment
+</details>
 
-20 // Project Status
-STATUS        Active Development
-TYPE          Full-Stack Software Engineering Project
-DOMAIN        AgTech / Coffee / Supply Chain
-FOCUS         Traceability + Intelligence + Transparency
-ARCHITECTURE  Web + Cloud + AI + GIS + Blockchain
-🚧 This project is under active development.
+---
 
-Some interfaces and architectural concepts have already been implemented, while database persistence, production authentication, blockchain functionality, AI services, and infrastructure are being progressively developed.
+## 🧭 Roadmap
 
-The repository therefore documents both implemented functionality and the engineering roadmap required to transform the platform into a production-oriented system.
+```mermaid
+gantt
+    title Development Phases
+    dateFormat  X
+    axisFormat  Phase %s
+    section Foundation
+    01 Platform Foundation       :active, p1, 0, 1
+    section Persistence
+    02 Persistent Application    :p2, 1, 2
+    section Core Engine
+    03 Traceability Engine       :p3, 2, 3
+    section Verification
+    04 Blockchain Layer          :p4, 3, 4
+    section Intelligence
+    05 Intelligent Agriculture   :p5, 4, 5
+    section Production
+    06 Production Engineering    :p6, 5, 6
+```
 
-21 // Engineering Objectives
+<details>
+<summary><b>Phase 01 · Platform Foundation</b></summary>
 
-This project explores how modern software-engineering technologies can address real operational challenges within coffee-producing ecosystems.
+<br/>
 
-The primary objectives are:
+- [ ] Application interface
+- [ ] Traceability center design
+- [ ] Farm-management interface
+- [ ] Processing workflows
+- [ ] Operational mapping interface
+- [ ] Analytics interface
+- [ ] B2B concepts
+- [ ] Internationalization foundation
 
-Improve farm-to-market traceability
-Build reliable digital coffee identities
-Digitize agricultural and processing records
-Increase supply-chain transparency
-Support data-driven decision making
-Enable geographic visibility
-Explore verifiable supply-chain records
-Apply AI to agricultural information
-Support multilingual and international users
-Design for field environments with limited connectivity
-22 // Contribution
+</details>
 
-Contributions, technical discussions, research collaboration, and ideas are welcome.
+<details>
+<summary><b>Phase 02 · Persistent Application Layer</b></summary>
 
-Areas of particular interest include:
-Software Engineering
-Distributed Systems
-Blockchain
-Artificial Intelligence
-Machine Learning
-Computer Vision
-Agricultural Technology
-GIS
-Supply Chain Engineering
-Data Engineering
-Cybersecurity
-UX Engineering
-Sustainability
+<br/>
 
-23 // Developer
-👨‍💻 Simon Wolde Balango
+- [ ] Production database
+- [ ] Replace demonstration data
+- [ ] Create / Read / Update / Delete operations
+- [ ] Persistent farm registration
+- [ ] Persistent producer records
+- [ ] Persistent coffee batches
+- [ ] Dynamic dashboards
+- [ ] Production authentication
 
-Computer Engineer • Software Developer • Technology Builder
+</details>
 
-Building at the intersection of:
+<details>
+<summary><b>Phase 03 · Traceability Engine</b></summary>
 
-Software Engineering • Artificial Intelligence • Blockchain
- Agriculture • Data Engineering • Global Supply Chains
+<br/>
 
+- [ ] Supply-chain event engine
+- [ ] Dynamic batch histories
+- [ ] QR generation
+- [ ] Public traceability endpoint
+- [ ] Quality-data integration
+- [ ] Document verification
 
-☕ From Origin to Intelligence
+</details>
 
-Every coffee has an origin.
- Every batch has a journey.
- Engineering can make that journey transparent, intelligent, and verifiable.
+<details>
+<summary><b>Phase 04 · Blockchain Layer</b></summary>
 
-GLOBAL COFFEE TRACEABILITY PLATFORM
+<br/>
 
-Farm → Data → Intelligence → Trust → Cup
+- [ ] Smart-contract architecture
+- [ ] Batch registration
+- [ ] Supply-chain transaction records
+- [ ] Data hashing
+- [ ] Transaction verification
+- [ ] Blockchain explorer integration
 
+</details>
 
+<details>
+<summary><b>Phase 05 · Intelligent Agriculture</b></summary>
 
+<br/>
 
+- [ ] Crop analysis services
+- [ ] Disease-detection workflow
+- [ ] Predictive production analytics
+- [ ] Intelligent recommendations
+- [ ] AI-assisted reports
 
+</details>
+
+<details>
+<summary><b>Phase 06 · Production Engineering</b></summary>
+
+<br/>
+
+- [ ] Automated testing
+- [ ] CI/CD pipeline
+- [ ] Monitoring
+- [ ] Logging
+- [ ] Security hardening
+- [ ] Performance optimization
+- [ ] Offline synchronization
+- [ ] Production deployment
+
+</details>
+
+---
+
+## 🚧 Project Status
+
+| | |
+|---|---|
+| **Status** | Active development |
+| **Type** | Full-stack software engineering project |
+| **Domain** | AgTech · Coffee · Supply chain |
+| **Focus** | Traceability · Intelligence · Transparency |
+| **Architecture** | Web + Cloud + AI + GIS + Blockchain |
+
+> Some interfaces and architectural concepts are already implemented. Database persistence, production authentication, blockchain functionality, AI services and infrastructure are being developed progressively. This repository documents both implemented functionality and the engineering roadmap toward a production-oriented system.
+
+---
+
+## 🎯 Engineering Objectives
+
+- Improve farm-to-market traceability and build reliable digital coffee identities
+- Digitize agricultural and processing records
+- Increase supply-chain transparency and support data-driven decisions
+- Enable geographic visibility
+- Explore verifiable supply-chain records
+- Apply AI to agricultural information
+- Support multilingual, international users
+- Design for field environments with limited connectivity
+
+---
+
+## 🤝 Contributing
+
+Contributions, technical discussions, research collaboration and ideas are welcome.
+
+![Software Engineering](https://img.shields.io/badge/Software%20Engineering-4E342E?style=flat-square)
+![Distributed Systems](https://img.shields.io/badge/Distributed%20Systems-4E342E?style=flat-square)
+![Blockchain](https://img.shields.io/badge/Blockchain-4E342E?style=flat-square)
+![AI / ML](https://img.shields.io/badge/AI%20%2F%20ML-4E342E?style=flat-square)
+![Computer Vision](https://img.shields.io/badge/Computer%20Vision-4E342E?style=flat-square)
+![AgTech](https://img.shields.io/badge/AgTech-4E342E?style=flat-square)
+![GIS](https://img.shields.io/badge/GIS-4E342E?style=flat-square)
+![Supply Chain](https://img.shields.io/badge/Supply%20Chain-4E342E?style=flat-square)
+![Data Engineering](https://img.shields.io/badge/Data%20Engineering-4E342E?style=flat-square)
+![Cybersecurity](https://img.shields.io/badge/Cybersecurity-4E342E?style=flat-square)
+![UX Engineering](https://img.shields.io/badge/UX%20Engineering-4E342E?style=flat-square)
+![Sustainability](https://img.shields.io/badge/Sustainability-4E342E?style=flat-square)
+
+---
+
+## 👨‍💻 Developer
+
+<div align="center">
+
+### Simon Wolde Balango
+
+**Computer Engineer · Software Developer · Technology Builder**
+
+Building at the intersection of
+**Software Engineering · Artificial Intelligence · Blockchain · Agriculture · Data Engineering · Global Supply Chains**
+
+<br/>
+
+> *Every coffee has an origin. Every batch has a journey.*
+> *Engineering can make that journey transparent, intelligent and verifiable.*
+
+<br/>
+
+<a href="#">
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=18&pause=1500&color=C69C6D&center=true&vCenter=true&width=520&lines=Farm+%E2%86%92+Data+%E2%86%92+Intelligence+%E2%86%92+Trust+%E2%86%92+Cup" alt="Tagline" />
+</a>
+
+</div>
+
+<img src="https://capsule-render.vercel.app/api?type=venom&color=0:C69C6D,50:4E342E,100:1B0F0A&height=120&section=footer" alt="Footer" width="100%" />
