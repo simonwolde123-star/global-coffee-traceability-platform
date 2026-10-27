@@ -4,8 +4,11 @@
  */
 
 import React, { useState } from "react";
-import { Lock, Mail, User, ShieldCheck, RefreshCw, Star, Info, Sprout, Globe } from "lucide-react";
+import { Lock, Mail, User, ShieldCheck, RefreshCw, Star, Info, Sprout, Globe, Film } from "lucide-react";
 import { LanguageCode, translations } from "../translations";
+import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { auth, googleAuthProvider } from "../firebase";
+import { saveUserProfile } from "../services/firestoreService";
 
 interface AuthUser {
   username: string;
@@ -18,9 +21,11 @@ interface AuthScreenProps {
   isOffline: boolean;
   language: LanguageCode;
   setLanguage: (lang: LanguageCode) => void;
+  onPublicVerifyClick?: () => void;
+  onWatchPromoVideo?: () => void;
 }
 
-export default function AuthScreen({ onAuthSuccess, isOffline, language, setLanguage }: AuthScreenProps) {
+export default function AuthScreen({ onAuthSuccess, isOffline, language, setLanguage, onPublicVerifyClick, onWatchPromoVideo }: AuthScreenProps) {
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   
   // Translation shortener
@@ -37,6 +42,45 @@ export default function AuthScreen({ onAuthSuccess, isOffline, language, setLang
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Email Verification states
+  const [verificationPending, setVerificationPending] = useState(false);
+  const [emailToVerify, setEmailToVerify] = useState("");
+  const [verificationCodeInput, setVerificationCodeInput] = useState("");
+  const [systemDraftCode, setSystemDraftCode] = useState("");
+  const [originalPendingUser, setOriginalPendingUser] = useState<any>(null);
+
+  // Google sign in via Firebase Auth popup
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await signInWithPopup(auth, googleAuthProvider);
+      const user = result.user;
+      const userProfile = {
+        uid: user.uid,
+        email: user.email || "",
+        name: user.displayName || user.email?.split("@")[0] || "Coffee Auditor",
+        username: user.email?.split("@")[0] || "auditor",
+        role: "QualityInspector",
+        createdAt: new Date().toISOString()
+      };
+      await saveUserProfile(userProfile);
+      setSuccess("Authenticated with Google successfully!");
+      setTimeout(() => {
+        onAuthSuccess({
+          name: userProfile.name,
+          username: userProfile.username,
+          email: userProfile.email
+        }, user.uid);
+      }, 600);
+    } catch (err: any) {
+      console.warn("Google popup login error:", err);
+      setError(err.message || "Google authentication failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Quick select standard demo credentials
   const handleQuickDemoLogin = async () => {
@@ -124,10 +168,25 @@ export default function AuthScreen({ onAuthSuccess, isOffline, language, setLang
         throw new Error(data.error || t.authErrorMessage);
       }
 
-      setSuccess(activeTab === "register" ? "Registered successfully!" : t.authSuccessMessage);
-      setTimeout(() => {
-        onAuthSuccess(data.user, data.token);
-      }, 800);
+      if (activeTab === "register") {
+        if (data.isVerificationRequired) {
+          setVerificationPending(true);
+          setEmailToVerify(data.email || email);
+          setSystemDraftCode(data.code || "");
+          setOriginalPendingUser(null); // Managed server-side
+          setSuccess(t.verificationSent);
+        } else {
+          setSuccess("Registered successfully!");
+          setTimeout(() => {
+            onAuthSuccess(data.user, data.token);
+          }, 800);
+        }
+      } else {
+        setSuccess(t.authSuccessMessage);
+        setTimeout(() => {
+          onAuthSuccess(data.user, data.token);
+        }, 800);
+      }
 
     } catch (err: any) {
       console.warn("Auth Server Endpoint issue:", err.message);
@@ -154,13 +213,14 @@ export default function AuthScreen({ onAuthSuccess, isOffline, language, setLang
       }
 
       const newUser = { username, email, password, name };
-      cachedUsers.push(newUser);
-      localStorage.setItem("origina_cached_users", JSON.stringify(cachedUsers));
-
-      setSuccess(language === "es" ? "¡Registrado localmente de manera segura!" : "Registered and Saved to Local Cache!");
-      setTimeout(() => {
-        onAuthSuccess({ username, email, name }, `offline-token-${username}`);
-      }, 900);
+      const offlineCode = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      setOriginalPendingUser(newUser);
+      setSystemDraftCode(offlineCode);
+      setEmailToVerify(email);
+      setVerificationPending(true);
+      setSuccess(t.verificationSent);
+      setLoading(false);
     } else {
       // Login attempt
       let found = cachedUsers.find((u: any) => 
@@ -186,14 +246,84 @@ export default function AuthScreen({ onAuthSuccess, isOffline, language, setLang
     }
   };
 
+  const handleVerifySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+
+    if (!verificationCodeInput || verificationCodeInput.trim().length !== 6) {
+      setError(language === "it" ? "Inserisci un codice valido a 6 cifre." : "Please enter a valid 6-digit confirmation code.");
+      return;
+    }
+
+    setLoading(true);
+
+    if (systemDraftCode && !originalPendingUser) {
+      // Server-side verification flow
+      try {
+        const response = await fetch("/api/auth/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: emailToVerify, code: verificationCodeInput.trim() }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || t.codeInvalid);
+        }
+
+        setSuccess(t.verifySuccess);
+        setTimeout(() => {
+          onAuthSuccess(data.user, data.token);
+        }, 1000);
+
+      } catch (err: any) {
+        setError(err.message || t.codeInvalid);
+        setLoading(false);
+      }
+    } else {
+      // Local/Offline simulation verify check
+      if (verificationCodeInput.trim() !== systemDraftCode) {
+        setError(t.codeInvalid);
+        setLoading(false);
+        return;
+      }
+
+      const savedUsersStr = localStorage.getItem("origina_cached_users") || "[]";
+      const cachedUsers = JSON.parse(savedUsersStr);
+      cachedUsers.push(originalPendingUser);
+      localStorage.setItem("origina_cached_users", JSON.stringify(cachedUsers));
+
+      setSuccess(t.verifySuccess);
+      setTimeout(() => {
+        onAuthSuccess(
+          { username: originalPendingUser.username, email: originalPendingUser.email, name: originalPendingUser.name },
+          `offline-token-${originalPendingUser.username}`
+        );
+      }, 1000);
+    }
+  };
+
+  const handleResendCode = () => {
+    setError(null);
+    setSuccess(null);
+    setLoading(true);
+
+    const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
+    setSystemDraftCode(generatedCode);
+    setSuccess(t.verificationSent);
+    setLoading(false);
+  };
+
   return (
     <div className="min-h-screen bg-[#F6F5F2] flex flex-col items-center justify-center p-4">
       {/* Dynamic Selector for Worldwide Languages */}
       <div className="mb-6 flex items-center gap-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-200">
         <Globe size={14} className="text-gray-400" />
         <span className="text-[10px] font-mono font-bold text-gray-500 uppercase tracking-widest mr-1">Language:</span>
-        <div className="flex gap-1.5">
-          {(["en", "es", "fr", "pt"] as LanguageCode[]).map((lang) => (
+        <div className="flex flex-wrap gap-1.5 justify-center">
+          {(["en", "it", "am", "es", "fr", "pt"] as LanguageCode[]).map((lang) => (
             <button
               key={lang}
               onClick={() => setLanguage(lang)}
@@ -275,83 +405,159 @@ export default function AuthScreen({ onAuthSuccess, isOffline, language, setLang
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {activeTab === "register" && (
+          {verificationPending ? (
+            <div className="space-y-6">
+              <form onSubmit={handleVerifySubmit} className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
+                    {t.enterVerificationCode}
+                  </label>
+                  <p className="text-xs text-gray-500 mb-3 leading-relaxed">
+                    {language === "it" 
+                      ? `Inviato un codice di sicurezza speciale a ${emailToVerify}.`
+                      : language === "am"
+                      ? `ልዩ የማረጋገጫ ኮድ ወደ ${emailToVerify} ልከናል።`
+                      : `Sent secure code to ${emailToVerify}.`
+                    }
+                  </p>
+                  <div className="relative">
+                    <ShieldCheck className="absolute left-3 top-2.5 h-4 w-4 text-[#C5A059]" />
+                    <input
+                      type="text"
+                      required
+                      maxLength={6}
+                      placeholder={t.verifyInputPlaceholder}
+                      value={verificationCodeInput}
+                      onChange={(e) => setVerificationCodeInput(e.target.value)}
+                      className="w-full bg-white border border-gray-200 rounded-xl py-2.5 pl-9 pr-4 text-xs font-mono font-bold tracking-widest text-[#2D2926] focus:ring-1 focus:ring-[#C5A059] focus:grid-[#C5A059] outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVerificationPending(false);
+                      setSuccess(null);
+                      setError(null);
+                    }}
+                    className="flex-1 border border-gray-250 hover:bg-gray-50 text-gray-700 py-2 rounded-xl text-xs font-bold uppercase transition-colors"
+                  >
+                    {language === "it" ? "Indietro" : language === "am" ? "ተመለስ" : "Back"}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex-1 bg-black hover:bg-black/95 text-white py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors disabled:opacity-50 flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    {loading ? <RefreshCw size={12} className="animate-spin text-[#C5A059]" /> : null}
+                    {language === "it" ? "Verifica" : language === "am" ? "አረጋግጥ" : "Verify Code"}
+                  </button>
+                </div>
+              </form>
+
+              {/* Inbound Satellite Mail Server Simulated UI */}
+              <div className="border border-[#C5A059]/30 rounded-xl overflow-hidden shadow-inner bg-[#FDFBF7]">
+                <div className="bg-[#1b1b1b] px-3.5 py-2 text-white flex items-center justify-between border-b border-[#C5A059]/20">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-[10px] font-mono font-bold tracking-wider text-[#C5A059] uppercase">
+                      {t.emailSimulatorTitle}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleResendCode}
+                    className="text-[9px] font-bold uppercase text-white/70 hover:text-white bg-white/10 hover:bg-white/15 px-2 py-0.5 rounded transition-all"
+                  >
+                    {t.resendCode}
+                  </button>
+                </div>
+                
+                <div className="p-4 space-y-2.5 text-[11px] font-mono leading-relaxed text-gray-700">
+                  <div className="grid grid-cols-4 gap-1 border-b border-gray-150 pb-2">
+                    <span className="font-bold text-gray-400 uppercase">From:</span>
+                    <span className="col-span-3 text-black">security@beantrace.org</span>
+                    
+                    <span className="font-bold text-gray-400 uppercase">To:</span>
+                    <span className="col-span-3 text-black font-semibold">{emailToVerify}</span>
+                    
+                    <span className="font-bold text-gray-400 uppercase">Subject:</span>
+                    <span className="col-span-3 text-[#C5A059] font-bold">{t.emailVerificationSubject}</span>
+                  </div>
+
+                  <div className="pt-2 text-gray-600 bg-white p-3 rounded border border-gray-150 relative select-all selection:bg-amber-100">
+                    <p className="mb-2.5">
+                      {t.emailVerificationBody}
+                    </p>
+                    <div className="bg-[#FCF8EE] border border-[#C5A059]/35 py-2.5 text-center text-lg font-bold tracking-widest text-black rounded select-all selection:bg-amber-100">
+                      {systemDraftCode}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {activeTab === "register" && (
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
+                    {t.fullNameLabel}
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                    <input
+                      type="text"
+                      required
+                      placeholder="Elena Rostova"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full bg-white border border-gray-200 rounded-xl py-2 pl-9 pr-4 text-xs focus:ring-1 focus:ring-[#C5A059] focus:grid-[#C5A059] outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
-                  {t.fullNameLabel}
+                  {t.usernameLabel}
                 </label>
                 <div className="relative">
                   <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
                   <input
                     type="text"
                     required
-                    placeholder="Elena Rostova"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    placeholder={activeTab === "register" ? "auditor_coop" : "auditor / auditor@beantrace.org"}
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
                     className="w-full bg-white border border-gray-200 rounded-xl py-2 pl-9 pr-4 text-xs focus:ring-1 focus:ring-[#C5A059] focus:grid-[#C5A059] outline-none"
                   />
                 </div>
               </div>
-            )}
 
-            <div>
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
-                {t.usernameLabel}
-              </label>
-              <div className="relative">
-                <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
-                  required
-                  placeholder={activeTab === "register" ? "auditor_coop" : "auditor / auditor@beantrace.org"}
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-xl py-2 pl-9 pr-4 text-xs focus:ring-1 focus:ring-[#C5A059] focus:grid-[#C5A059] outline-none"
-                />
-              </div>
-            </div>
+              {activeTab === "register" && (
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
+                    {t.emailLabel}
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                    <input
+                      type="email"
+                      required
+                      placeholder="auditor@beantrace.org"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full bg-white border border-gray-200 rounded-xl py-2 pl-9 pr-4 text-xs focus:ring-1 focus:ring-[#C5A059] focus:grid-[#C5A059] outline-none"
+                    />
+                  </div>
+                </div>
+              )}
 
-            {activeTab === "register" && (
               <div>
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
-                  {t.emailLabel}
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                  <input
-                    type="email"
-                    required
-                    placeholder="auditor@beantrace.org"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-white border border-gray-200 rounded-xl py-2 pl-9 pr-4 text-xs focus:ring-1 focus:ring-[#C5A059] focus:grid-[#C5A059] outline-none"
-                  />
-                </div>
-              </div>
-            )}
-
-            <div>
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
-                {t.passwordLabel}
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                <input
-                  type="password"
-                  required
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-xl py-2 pl-9 pr-4 text-xs focus:ring-1 focus:ring-[#C5A059] focus:grid-[#C5A059] outline-none"
-                />
-              </div>
-            </div>
-
-            {activeTab === "register" && (
-              <div>
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
-                  {t.confirmPasswordLabel}
+                  {t.passwordLabel}
                 </label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
@@ -359,37 +565,71 @@ export default function AuthScreen({ onAuthSuccess, isOffline, language, setLang
                     type="password"
                     required
                     placeholder="••••••••"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     className="w-full bg-white border border-gray-200 rounded-xl py-2 pl-9 pr-4 text-xs focus:ring-1 focus:ring-[#C5A059] focus:grid-[#C5A059] outline-none"
                   />
                 </div>
               </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-black hover:bg-black/95 text-white py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors duration-250 mt-2 cursor-pointer flex items-center justify-center gap-2 shadow md:shadow-md"
-            >
-              {loading ? (
-                <>
-                  <RefreshCw size={14} className="animate-spin text-[#C5A059]" />
-                  Processing...
-                </>
-              ) : activeTab === "register" ? (
-                t.registerButton
-              ) : (
-                t.loginButton
+              {activeTab === "register" && (
+                <div>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                    {t.confirmPasswordLabel}
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                    <input
+                      type="password"
+                      required
+                      placeholder="••••••••"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full bg-white border border-gray-200 rounded-xl py-2 pl-9 pr-4 text-xs focus:ring-1 focus:ring-[#C5A059] focus:grid-[#C5A059] outline-none"
+                    />
+                  </div>
+                </div>
               )}
-            </button>
-          </form>
 
-          {/* Quick Demo Access Trigger */}
-          <div className="border-t border-gray-150 pt-5 space-y-3">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-black hover:bg-black/95 text-white py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors duration-250 mt-2 cursor-pointer flex items-center justify-center gap-2 shadow md:shadow-md"
+              >
+                {loading ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin text-[#C5A059]" />
+                    Processing...
+                  </>
+                ) : activeTab === "register" ? (
+                  t.registerButton
+                ) : (
+                  t.loginButton
+                )}
+              </button>
+            </form>
+          )}
+
+          {/* Google Sign-in & Quick Access Triggers */}
+          <div className="border-t border-gray-150 pt-4 space-y-2.5">
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              className="w-full bg-white hover:bg-gray-50 border border-gray-300 text-gray-800 py-2.5 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2.5 cursor-pointer shadow-xs hover:border-gray-400"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
+                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+                <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+              </svg>
+              <span>Sign in with Google</span>
+            </button>
+
             <div className="text-center">
-              <span className="text-[9px] bg-white px-2 py-1 border border-gray-200 text-gray-400 uppercase tracking-widest font-mono rounded">
-                Symmetric Certification Setup
+              <span className="text-[9px] bg-white px-2 py-0.5 border border-gray-200 text-gray-400 uppercase tracking-widest font-mono rounded">
+                Or Continue As Demo Auditor
               </span>
             </div>
             
@@ -402,6 +642,29 @@ export default function AuthScreen({ onAuthSuccess, isOffline, language, setLang
               <Star size={14} className="text-[#C5A059] fill-[#C5A059]" />
               <span>{t.demoAccessButton}</span>
             </button>
+
+            {onWatchPromoVideo && (
+              <button
+                type="button"
+                onClick={onWatchPromoVideo}
+                className="w-full bg-[#3D5A40] hover:bg-[#2F4632] text-white py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+              >
+                <Film size={14} className="text-[#E8C882]" />
+                <span>🎬 Watch Platform Commercial (42s)</span>
+              </button>
+            )}
+
+            {onPublicVerifyClick && (
+              <button
+                type="button"
+                onClick={onPublicVerifyClick}
+                className="w-full bg-white border border-gray-250 hover:bg-gray-50 text-gray-700 py-2 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <ShieldCheck size={14} className="text-[#3D5A40]" />
+                <span>Verify Public Coffee Batch (QR / Lot ID)</span>
+              </button>
+            )}
+
             <p className="text-[9px] text-[#2D2926]/50 text-center leading-normal max-w-[300px] mx-auto font-mono">
               {t.demoCredentialsNote}
             </p>
@@ -409,8 +672,11 @@ export default function AuthScreen({ onAuthSuccess, isOffline, language, setLang
         </div>
 
         {/* Brand footers */}
-        <div className="p-4 bg-gray-50 border-t border-gray-150 text-center flex items-center justify-center gap-1">
-          <span className="text-[9px] text-gray-400 uppercase font-mono">
+        <div className="p-4 bg-gray-50 border-t border-gray-150 text-center flex flex-col items-center justify-center gap-1">
+          <span className="text-[9px] text-gray-500 uppercase font-mono font-bold tracking-wider">
+            © 2026 Origina Traceability Ledger · Lead Developer: Simon Wolde Balango
+          </span>
+          <span className="text-[8px] text-gray-400 font-mono">
             Platform Certified Worldwide Usability · BeanTrace Alliance
           </span>
         </div>

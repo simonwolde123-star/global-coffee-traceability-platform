@@ -1,0 +1,181 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role and cooperative details",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "description": "User email address" },
+        "name": { "type": "string", "description": "User full name" },
+        "username": { "type": "string", "description": "Unique username handle" },
+        "role": { "type": "string", "description": "Role in the coffee supply chain" },
+        "cooperative": { "type": "string", "description": "Affiliated coffee cooperative" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of registration" }
+      },
+      "required": ["uid", "email", "name"]
+    },
+    "Farmer": {
+      "title": "Farmer",
+      "description": "Coffee smallholder producer profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique farmer record ID" },
+        "name": { "type": "string", "description": "Farmer full legal name" },
+        "cooperative": { "type": "string", "description": "Cooperative name" },
+        "region": { "type": "string", "description": "Growing region or district" },
+        "country": { "type": "string", "description": "Country of origin" },
+        "farmId": { "type": "string", "description": "Associated farm ID" },
+        "phone": { "type": "string", "description": "Contact telephone number" },
+        "userId": { "type": "string", "description": "UID of the creator or managing account" },
+        "createdAt": { "type": "string", "description": "ISO timestamp" }
+      },
+      "required": ["id", "name", "cooperative", "userId"]
+    },
+    "Farm": {
+      "title": "Farm",
+      "description": "Agricultural estate and farm plot record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Farm identifier" },
+        "name": { "type": "string", "description": "Farm or estate name" },
+        "farmerName": { "type": "string", "description": "Operator farmer name" },
+        "cooperative": { "type": "string", "description": "Cooperative union" },
+        "region": { "type": "string", "description": "Province or region" },
+        "country": { "type": "string", "description": "Country" },
+        "latitude": { "type": "number", "description": "GPS latitude" },
+        "longitude": { "type": "number", "description": "GPS longitude" },
+        "altitude": { "type": "number", "description": "Elevation in meters above sea level" },
+        "sizeHectares": { "type": "number", "description": "Area in hectares" },
+        "capacityBags": { "type": "number", "description": "Annual capacity in 60kg bags" },
+        "soilType": { "type": "string", "description": "Soil profile" },
+        "climateZone": { "type": "string", "description": "Climate classification" },
+        "harvestStart": { "type": "string", "description": "Harvest season start month" },
+        "harvestEnd": { "type": "string", "description": "Harvest season end month" },
+        "certifications": { "type": "array", "description": "Active certification badges" },
+        "userId": { "type": "string", "description": "UID of owner/creator" },
+        "createdAt": { "type": "string", "description": "ISO timestamp" }
+      },
+      "required": ["id", "name", "farmerName", "cooperative", "userId"]
+    },
+    "CoffeeBatch": {
+      "title": "CoffeeBatch",
+      "description": "Traceable coffee lot processing record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Batch unique document ID" },
+        "lotNumber": { "type": "string", "description": "Unique lot identifier code" },
+        "farmId": { "type": "string", "description": "Referenced farm ID" },
+        "washingStation": { "type": "string", "description": "Processing station name" },
+        "method": { "type": "string", "description": "Processing method" },
+        "variety": { "type": "string", "description": "Botanical variety" },
+        "fermentationHours": { "type": "number", "description": "Hours of fermentation" },
+        "dryingMethod": { "type": "string", "description": "Drying technique" },
+        "moistureContent": { "type": "number", "description": "Moisture percentage" },
+        "grade": { "type": "string", "description": "Quality classification" },
+        "cuppingScore": { "type": "number", "description": "SCA cupping score" },
+        "status": { "type": "string", "description": "Supply chain stage status" },
+        "harvestDate": { "type": "string", "description": "Harvest date (YYYY-MM-DD)" },
+        "dryMillDate": { "type": "string", "description": "Milling date" },
+        "exportDate": { "type": "string", "description": "Export date" },
+        "buyerName": { "type": "string", "description": "Assigned buyer or consignee" },
+        "weightKg": { "type": "number", "description": "Weight in kilograms" },
+        "userId": { "type": "string", "description": "UID of the creator" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "description": "Last updated timestamp" }
+      },
+      "required": ["id", "lotNumber", "farmId", "method", "status", "userId"]
+    },
+    "SupplyChainEvent": {
+      "title": "SupplyChainEvent",
+      "description": "Milestone event in the coffee batch supply chain lifecycle",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Event unique ID" },
+        "lotNumber": { "type": "string", "description": "Associated batch lot number" },
+        "batchId": { "type": "string", "description": "Associated batch document ID" },
+        "title": { "type": "string", "description": "Event stage title" },
+        "stage": { "type": "string", "description": "Supply chain phase" },
+        "location": { "type": "string", "description": "Physical milestone location" },
+        "timestamp": { "type": "string", "description": "ISO timestamp of event" },
+        "details": { "type": "string", "description": "Milestone observations or measurements" },
+        "operator": { "type": "string", "description": "Person or entity logging the event" },
+        "userId": { "type": "string", "description": "UID of the recorder" }
+      },
+      "required": ["id", "lotNumber", "title", "stage", "userId"]
+    },
+    "BlockchainTransaction": {
+      "title": "BlockchainTransaction",
+      "description": "Fairtrade audit and immutable ledger transaction",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Transaction hash/ID" },
+        "lotNumber": { "type": "string", "description": "Associated batch lot number" },
+        "timestamp": { "type": "string", "description": "Audit block timestamp" },
+        "auditorName": { "type": "string", "description": "Accredited auditor name" },
+        "cooperativeId": { "type": "string", "description": "Cooperative identifier" },
+        "basePricePaidUSD": { "type": "number", "description": "Base price per lb in USD" },
+        "premiumPaidUSD": { "type": "number", "description": "Fairtrade premium per lb in USD" },
+        "childLaborFree": { "type": "boolean", "description": "Labor compliance flag" },
+        "safeWorkingConditions": { "type": "boolean", "description": "Safety compliance flag" },
+        "organicPractice": { "type": "boolean", "description": "Organic cultivation flag" },
+        "forestPreserved": { "type": "boolean", "description": "Forestry preservation flag" },
+        "auditScore": { "type": "number", "description": "Audit score out of 100" },
+        "inspectorComments": { "type": "string", "description": "Auditor qualitative findings" },
+        "txHash": { "type": "string", "description": "Cryptographic hash" },
+        "blockIndex": { "type": "number", "description": "Block sequence number" },
+        "userId": { "type": "string", "description": "UID of submitting auditor" }
+      },
+      "required": ["id", "lotNumber", "auditorName", "auditScore", "userId"]
+    },
+    "Certification": {
+      "title": "Certification",
+      "description": "Standard certification registry entry for a cooperative or farm",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Certification record ID" },
+        "name": { "type": "string", "description": "Certification standard name" },
+        "authority": { "type": "string", "description": "Issuing certification body" },
+        "description": { "type": "string", "description": "Standard scope description" },
+        "tagline": { "type": "string", "description": "Short marketing slogan" },
+        "colorClass": { "type": "string", "description": "UI badge styling class" },
+        "icon": { "type": "string", "description": "Icon identifier" },
+        "certNumber": { "type": "string", "description": "Official audit certificate number" },
+        "farmId": { "type": "string", "description": "Associated farm ID if specific" },
+        "status": { "type": "string", "description": "Audit verification status" },
+        "userId": { "type": "string", "description": "UID of the managing user" }
+      },
+      "required": ["id", "name", "authority", "userId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/farmers/{farmerId}": {
+      "schema": "Farmer",
+      "description": "Farmer records"
+    },
+    "/farms/{farmId}": {
+      "schema": "Farm",
+      "description": "Farm estates and geospatial plots"
+    },
+    "/coffeeBatches/{batchId}": {
+      "schema": "CoffeeBatch",
+      "description": "Coffee processing batches and traceability records"
+    },
+    "/supplyChainEvents/{eventId}": {
+      "schema": "SupplyChainEvent",
+      "description": "Supply chain milestones linked to batch IDs"
+    },
+    "/blockchainTransactions/{txId}": {
+      "schema": "BlockchainTransaction",
+      "description": "Auditing and blockchain transaction records"
+    },
+    "/certifications/{certId}": {
+      "schema": "Certification",
+      "description": "Cooperative certifications"
+    }
+  }
+}

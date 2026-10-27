@@ -17,6 +17,8 @@ interface BlockchainAuditProps {
     isValid: boolean;
   };
   onFetchBlockchain: () => void;
+  transactions?: AuditingTransaction[];
+  onAddTransaction?: (tx: AuditingTransaction) => Promise<void> | void;
 }
 
 export default function BlockchainAudit({
@@ -24,7 +26,9 @@ export default function BlockchainAudit({
   isOffline,
   onQueueOfflineAction,
   blockchainState,
-  onFetchBlockchain
+  onFetchBlockchain,
+  transactions = [],
+  onAddTransaction
 }: BlockchainAuditProps) {
   const [lotNumber, setLotNumber] = useState("");
   const [auditorName, setAuditorName] = useState("Simon Wolde Balango");
@@ -71,7 +75,7 @@ export default function BlockchainAudit({
     if (!lotNumber) return;
 
     const auditData: Omit<AuditingTransaction, "id" | "timestamp"> = {
-      lotNumber,
+      lotNumber: lotNumber.trim().toUpperCase(),
       auditorName,
       cooperativeId,
       basePricePaidUSD: parseFloat(basePrice.toString()),
@@ -82,6 +86,15 @@ export default function BlockchainAudit({
       forestPreserved,
       auditScore: calculateScore(),
       inspectorComments: comments || "Passed standard Fairtrade cooperative ecological and wage inspection."
+    };
+
+    const newTxRecord: AuditingTransaction = {
+      id: `tx-ft-${Date.now()}`,
+      lotNumber: lotNumber.trim().toUpperCase(),
+      timestamp: new Date().toISOString(),
+      ...auditData,
+      txHash: `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("")}`,
+      blockIndex: (blockchainState.chain.length || 0) + 1
     };
 
     if (isOffline) {
@@ -98,36 +111,47 @@ export default function BlockchainAudit({
     setSuccessMsg("");
 
     try {
-      const res = await fetch("/api/blockchain/transaction", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(auditData)
-      });
-      if (res.ok) {
-        setSuccessMsg("Verification success! High-altitude block mined securely with SHA-256 links.");
-        setLotNumber("");
-        setComments("");
-        onFetchBlockchain();
-        setTimeout(() => setSuccessMsg(""), 5000);
-      } else {
-        setSuccessMsg("Error mining block on server.");
+      // Save directly to persistent Firestore blockchainTransactions collection
+      if (onAddTransaction) {
+        await onAddTransaction(newTxRecord);
       }
-    } catch (err) {
+
+      // Also notify blockchain express server if online
+      try {
+        await fetch("/api/blockchain/transaction", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(auditData)
+        });
+        onFetchBlockchain();
+      } catch (e) {
+        console.log("Blockchain node sync optional:", e);
+      }
+
+      setSuccessMsg("Verification success! High-altitude block mined and saved to Firestore blockchainTransactions!");
+      setLotNumber("");
+      setComments("");
+      setTimeout(() => setSuccessMsg(""), 5000);
+    } catch (err: any) {
       console.error(err);
-      setSuccessMsg("Network exception. Placed on internal local fallback storage.");
+      setSuccessMsg(err.message || "Error writing block to Firestore.");
     } finally {
       setMining(false);
     }
   };
 
-  // Aggregated premium analytics
+  // Aggregated premium analytics calculated from Firestore records
   const blocks = blockchainState.chain;
-  const totalPremiumUSD = blocks.reduce((acc, curr) => {
-    return acc + curr.transactions.reduce((tAcc, tCurr) => tAcc + tCurr.premiumPaidUSD + tCurr.basePricePaidUSD, 0);
-  }, 0);
-  const averagePricePaid = blocks.length > 0
-    ? (totalPremiumUSD / blocks.length).toFixed(2)
-    : "3.40";
+  const allTxs = [
+    ...transactions,
+    ...blockchainState.chain.flatMap(b => b.transactions)
+  ];
+  // Deduplicate by tx id if overlapping
+  const uniqueTxs = Array.from(new Map(allTxs.map(t => [t.id, t])).values());
+  const totalPremiumUSD = uniqueTxs.reduce((acc, curr) => acc + (curr.premiumPaidUSD || 0) + (curr.basePricePaidUSD || 0), 0);
+  const averagePricePaid = uniqueTxs.length > 0
+    ? (totalPremiumUSD / uniqueTxs.length).toFixed(2)
+    : "3.90";
 
   return (
     <div id="blockchain-audit-container" className="space-y-8">

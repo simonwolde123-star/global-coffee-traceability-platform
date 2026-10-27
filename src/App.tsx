@@ -4,10 +4,34 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { Compass, Sprout, ShieldCheck, QrCode, BrainCircuit, Users, Camera, Globe, Wifi } from "lucide-react";
+import { Compass, Sprout, ShieldCheck, QrCode, BrainCircuit, Users, Camera, Globe, Wifi, Loader2, AlertCircle } from "lucide-react";
 import { Farm, ProcessingBatch, MediaItem, CoffeeEvent, MarketPrice, BlockchainBlock, AuditingTransaction } from "./types";
-import { INITIAL_FARMS, INITIAL_BATCHES, INITIAL_MEDIA, COFFEE_EVENTS, MARKET_PRICES } from "./mockData";
+import { INITIAL_MEDIA, COFFEE_EVENTS, MARKET_PRICES } from "./mockData";
 import { LanguageCode, translations } from "./translations";
+import {
+  subscribeFarms,
+  subscribeCoffeeBatches,
+  subscribeSupplyChainEvents,
+  subscribeBlockchainTransactions,
+  subscribeFarmers,
+  subscribeCertifications,
+  createFarm,
+  updateFarm,
+  deleteFarm,
+  createCoffeeBatch,
+  updateCoffeeBatch,
+  deleteCoffeeBatch,
+  createSupplyChainEvent,
+  createBlockchainTransaction,
+  createFarmer,
+  ensureInitialData,
+  getUserProfile,
+  SupplyChainEventRecord,
+  FarmerRecord,
+  CertificationRecord
+} from "./services/firestoreService";
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { auth } from "./firebase";
 
 // Component imports
 import MapDashboard from "./components/MapDashboard";
@@ -20,11 +44,26 @@ import EcomDashboard from "./components/EcomDashboard";
 import OfflineStatusIndicator from "./components/OfflineStatusIndicator";
 import IndustryEcosystem from "./components/IndustryEcosystem";
 import AuthScreen from "./components/AuthScreen";
+import PublicBatchVerification from "./components/PublicBatchVerification";
 
 export default function App() {
   const [language, setLanguage] = useState<LanguageCode>(() => {
     const saved = localStorage.getItem("origina_language") as LanguageCode;
     return saved && ["en", "es", "fr", "pt"].includes(saved) ? saved : "en";
+  });
+
+  // State for public batch verification access (e.g. via QR code scan or direct verification link)
+  const [publicVerifyLot, setPublicVerifyLot] = useState<string | null>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const verifyParam = params.get("verify") || params.get("lot");
+      if (verifyParam && verifyParam.trim()) {
+        return verifyParam.trim();
+      }
+    } catch (e) {
+      console.warn("Failed to parse verification URL parameters:", e);
+    }
+    return null;
   });
 
   useEffect(() => {
@@ -35,10 +74,21 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<
     "map" | "farms" | "trace" | "ai" | "blockchain" | "media" | "roles"
-  >("map");
+  >(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam && ["map", "farms", "trace", "ai", "blockchain", "media", "roles"].includes(tabParam)) {
+        return tabParam as any;
+      }
+    } catch (e) {
+      console.warn("Failed to check active tab query param:", e);
+    }
+    return "map";
+  });
 
-  // --- SEED ENHANCED SESSIONS FOR GLOBAL USERS ---
-  const [currentUser, setCurrentUser] = useState<{ username: string; email: string; name: string } | null>(() => {
+  // --- FIREBASE AUTHENTICATION & USER SESSIONS ---
+  const [currentUser, setCurrentUser] = useState<{ username: string; email: string; name: string; uid?: string } | null>(() => {
     const saved = localStorage.getItem("origina_sessions_user");
     return saved ? JSON.parse(saved) : null;
   });
@@ -47,6 +97,30 @@ export default function App() {
     return localStorage.getItem("origina_sessions_token");
   });
 
+  // Track Firebase Auth state changes so user remains authenticated after refresh
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const profile = await getUserProfile(firebaseUser.uid);
+          const userObj = {
+            uid: firebaseUser.uid,
+            username: profile?.username || firebaseUser.email?.split("@")[0] || "auditor",
+            email: firebaseUser.email || "auditor@beantrace.org",
+            name: firebaseUser.displayName || profile?.name || "Simon Wolde Balango"
+          };
+          setCurrentUser(userObj);
+          setAuthToken(firebaseUser.uid);
+          localStorage.setItem("origina_sessions_user", JSON.stringify(userObj));
+          localStorage.setItem("origina_sessions_token", firebaseUser.uid);
+        } catch (e) {
+          console.warn("Could not sync user profile:", e);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   const handleAuthSuccess = (user: { username: string; email: string; name: string }, token: string) => {
     setCurrentUser(user);
     setAuthToken(token);
@@ -54,31 +128,35 @@ export default function App() {
     localStorage.setItem("origina_sessions_token", token);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.warn("Firebase sign out error:", e);
+    }
     setCurrentUser(null);
     setAuthToken(null);
     localStorage.removeItem("origina_sessions_user");
     localStorage.removeItem("origina_sessions_token");
   };
 
-  // --- GLOBAL STATE STORAGE ---
-  const [farms, setFarms] = useState<Farm[]>(() => {
-    const saved = localStorage.getItem("origina_farms");
-    return saved ? JSON.parse(saved) : INITIAL_FARMS;
-  });
-
-  const [batches, setBatches] = useState<ProcessingBatch[]>(() => {
-    const saved = localStorage.getItem("origina_batches");
-    return saved ? JSON.parse(saved) : INITIAL_BATCHES;
-  });
+  // --- FIRESTORE PERSISTENT STATE ---
+  const [farms, setFarms] = useState<Farm[]>([]);
+  const [batches, setBatches] = useState<ProcessingBatch[]>([]);
+  const [supplyChainEvents, setSupplyChainEvents] = useState<SupplyChainEventRecord[]>([]);
+  const [blockchainTxs, setBlockchainTxs] = useState<AuditingTransaction[]>([]);
+  const [farmers, setFarmers] = useState<FarmerRecord[]>([]);
+  const [certifications, setCertifications] = useState<CertificationRecord[]>([]);
+  const [loadingFirestore, setLoadingFirestore] = useState(true);
+  const [firestoreMsg, setFirestoreMsg] = useState<string | null>(null);
 
   const [media, setMedia] = useState<MediaItem[]>(() => {
     const saved = localStorage.getItem("origina_media");
     return saved ? JSON.parse(saved) : INITIAL_MEDIA;
   });
 
-  const [selectedFarmId, setSelectedFarmId] = useState<string>(farms[0]?.id || "");
-  const activeFarm = farms.find(f => f.id === selectedFarmId);
+  const [selectedFarmId, setSelectedFarmId] = useState<string>("");
+  const activeFarm = farms.find(f => f.id === selectedFarmId) || farms[0] || null;
   const [lastCapturedCoords, setLastCapturedCoords] = useState<{ lat: number; lng: number; alt: number } | null>(null);
 
   // --- CONNECTIVITY & QUEUING STATE ---
@@ -96,18 +174,215 @@ export default function App() {
     isValid: true
   });
 
-  // Sync state modifications to LocalStorage to support authentic local recovery
+  // Check and seed Firestore collections on startup if empty
   useEffect(() => {
-    localStorage.setItem("origina_farms", JSON.stringify(farms));
-  }, [farms]);
+    ensureInitialData().catch(err => console.warn("Init seed warning:", err));
+  }, []);
 
+  // Set up real-time listeners for all 6 Firestore collections
   useEffect(() => {
-    localStorage.setItem("origina_batches", JSON.stringify(batches));
-  }, [batches]);
+    const unsubs: Array<() => void> = [];
+
+    const unsubFarms = subscribeFarms(
+      (data) => {
+        setFarms(data);
+        if (data.length > 0 && !selectedFarmId) {
+          setSelectedFarmId(data[0].id);
+        }
+        setLoadingFirestore(false);
+      },
+      (err) => console.warn("Farms subscription:", err)
+    );
+    unsubs.push(unsubFarms);
+
+    const unsubBatches = subscribeCoffeeBatches(
+      (data) => {
+        setBatches(data);
+        setLoadingFirestore(false);
+      },
+      (err) => console.warn("Batches subscription:", err)
+    );
+    unsubs.push(unsubBatches);
+
+    const unsubEvents = subscribeSupplyChainEvents(
+      (data) => setSupplyChainEvents(data),
+      (err) => console.warn("Events subscription:", err)
+    );
+    unsubs.push(unsubEvents);
+
+    const unsubTxs = subscribeBlockchainTransactions(
+      (data) => setBlockchainTxs(data),
+      (err) => console.warn("Blockchain transactions subscription:", err)
+    );
+    unsubs.push(unsubTxs);
+
+    const unsubFarmers = subscribeFarmers(
+      (data) => setFarmers(data),
+      (err) => console.warn("Farmers subscription:", err)
+    );
+    unsubs.push(unsubFarmers);
+
+    const unsubCerts = subscribeCertifications(
+      (data) => setCertifications(data),
+      (err) => console.warn("Certifications subscription:", err)
+    );
+    unsubs.push(unsubCerts);
+
+    return () => {
+      unsubs.forEach(unsub => unsub());
+    };
+  }, []);
+
+  // --- REAL FIRESTORE CRUD DATABASE OPERATIONS ---
+  const handleAddFarm = async (newFarm: Farm) => {
+    if (isOffline) {
+      handleQueueOfflineAction("ADD_FARM", newFarm);
+      return;
+    }
+    try {
+      setFirestoreMsg("Saving farm to Firestore...");
+      await createFarm(newFarm);
+      await createFarmer({
+        id: `farmer-${newFarm.id}`,
+        name: newFarm.farmerName,
+        cooperative: newFarm.cooperative,
+        region: newFarm.region,
+        country: newFarm.country,
+        farmId: newFarm.id,
+        userId: auth.currentUser?.uid || "admin",
+        createdAt: new Date().toISOString()
+      });
+      setSelectedFarmId(newFarm.id);
+      setFirestoreMsg("Farm document created in Firestore!");
+      setTimeout(() => setFirestoreMsg(null), 3000);
+    } catch (err: any) {
+      setFirestoreMsg("Firestore error: " + (err.message || err));
+      setTimeout(() => setFirestoreMsg(null), 5000);
+    }
+  };
+
+  const handleRemoveFarm = async (farmId: string) => {
+    try {
+      setFirestoreMsg("Deleting farm from Firestore...");
+      await deleteFarm(farmId);
+      setFirestoreMsg("Farm deleted from Firestore.");
+      setTimeout(() => setFirestoreMsg(null), 3000);
+    } catch (err: any) {
+      setFirestoreMsg("Firestore error: " + (err.message || err));
+      setTimeout(() => setFirestoreMsg(null), 5000);
+    }
+  };
+
+  const handleUpdateFarmPolygon = async (farmId: string, polygon: Array<[number, number]>) => {
+    try {
+      setFirestoreMsg(`Saving EUDR polygon for farm to Cloud Firestore...`);
+      await updateFarm(farmId, { polygon });
+      setFirestoreMsg(`EUDR cadastral polygon persisted to Firestore!`);
+      setTimeout(() => setFirestoreMsg(null), 3500);
+    } catch (err: any) {
+      setFirestoreMsg("Firestore error: " + (err.message || err));
+      setTimeout(() => setFirestoreMsg(null), 5000);
+      throw err;
+    }
+  };
+
+  const handleAddBatch = async (newBatch: ProcessingBatch) => {
+    if (isOffline) {
+      handleQueueOfflineAction("ADD_BATCH", newBatch);
+      return;
+    }
+    try {
+      setFirestoreMsg("Saving coffee batch to Firestore...");
+      await createCoffeeBatch(newBatch);
+      setFirestoreMsg("Batch created in Firestore coffeeBatches collection!");
+      setTimeout(() => setFirestoreMsg(null), 3000);
+    } catch (err: any) {
+      setFirestoreMsg("Firestore error: " + (err.message || err));
+      setTimeout(() => setFirestoreMsg(null), 5000);
+    }
+  };
+
+  const handleUpdateBatch = async (lotNumber: string, updates: Partial<ProcessingBatch>) => {
+    try {
+      setFirestoreMsg(`Updating batch ${lotNumber} in Firestore...`);
+      await updateCoffeeBatch(lotNumber, updates);
+      setFirestoreMsg(`Batch ${lotNumber} updated successfully in Firestore!`);
+      setTimeout(() => setFirestoreMsg(null), 3000);
+    } catch (err: any) {
+      setFirestoreMsg("Firestore error: " + (err.message || err));
+      setTimeout(() => setFirestoreMsg(null), 5000);
+      throw err;
+    }
+  };
+
+  const handleDeleteBatch = async (lotNumber: string) => {
+    try {
+      setFirestoreMsg(`Deleting batch ${lotNumber} from Firestore...`);
+      await deleteCoffeeBatch(lotNumber);
+      setFirestoreMsg(`Batch ${lotNumber} deleted from Firestore!`);
+      setTimeout(() => setFirestoreMsg(null), 3000);
+    } catch (err: any) {
+      setFirestoreMsg("Firestore error: " + (err.message || err));
+      setTimeout(() => setFirestoreMsg(null), 5000);
+      throw err;
+    }
+  };
+
+  const handleAddSupplyChainEvent = async (event: SupplyChainEventRecord) => {
+    try {
+      setFirestoreMsg("Appending supply-chain milestone to Firestore...");
+      await createSupplyChainEvent(event);
+      setFirestoreMsg("Milestone event recorded in Firestore supplyChainEvents!");
+      setTimeout(() => setFirestoreMsg(null), 3000);
+    } catch (err: any) {
+      setFirestoreMsg("Firestore error: " + (err.message || err));
+      setTimeout(() => setFirestoreMsg(null), 5000);
+      throw err;
+    }
+  };
+
+  const handleMineTransaction = async (tx: AuditingTransaction) => {
+    try {
+      setFirestoreMsg("Saving blockchain transaction to Firestore...");
+      await createBlockchainTransaction(tx);
+      setFirestoreMsg("Audit block persisted in Firestore blockchainTransactions!");
+      setTimeout(() => setFirestoreMsg(null), 3000);
+    } catch (err: any) {
+      setFirestoreMsg("Firestore error: " + (err.message || err));
+      setTimeout(() => setFirestoreMsg(null), 5000);
+      throw err;
+    }
+  };
 
   useEffect(() => {
     localStorage.setItem("origina_media", JSON.stringify(media));
   }, [media]);
+
+  // If user or public visitor is accessing a verified batch via QR code or public verification link:
+  if (publicVerifyLot) {
+    const verifiedBatch = batches.find(b => b.lotNumber.toUpperCase() === publicVerifyLot.toUpperCase()) || batches[0];
+    const verifiedFarm = farms.find(f => f.id === verifiedBatch?.farmId) || farms[0];
+    const latestBlock = blockchainState.chain[blockchainState.chain.length - 1];
+
+    return (
+      <PublicBatchVerification
+        batch={verifiedBatch}
+        farm={verifiedFarm}
+        blockchainBlock={latestBlock}
+        allBatches={batches}
+        onSelectAnotherLot={(lot) => setPublicVerifyLot(lot)}
+        onEnterPortal={() => {
+          setPublicVerifyLot(null);
+          try {
+            const url = new URL(window.location.href);
+            url.searchParams.delete("verify");
+            url.searchParams.delete("lot");
+            window.history.replaceState({}, "", url.pathname || "/");
+          } catch {}
+        }}
+      />
+    );
+  }
 
   // If user profile is not authenticated, render the secure authentication gate first
   if (!currentUser) {
@@ -117,6 +392,7 @@ export default function App() {
         isOffline={isOffline} 
         language={language}
         setLanguage={setLanguage}
+        onPublicVerifyClick={() => setPublicVerifyLot(batches[0]?.lotNumber || "LOT-ETH-2026-AA03")}
       />
     );
   }
@@ -333,6 +609,14 @@ export default function App() {
             <Users size={16} className={activeTab === "roles" ? "text-[#C5A059]" : "text-white/40"} />
             <span className="whitespace-nowrap">{t.tabEcom}</span>
           </button>
+
+          <button
+            onClick={() => setPublicVerifyLot(batches[0]?.lotNumber || "LOT-ETH-2026-AA03")}
+            className="px-5 py-2.5 text-xs lg:text-sm flex items-center gap-3 shrink-0 lg:w-full transition-all border-b-2 lg:border-b-0 lg:border-l-4 text-[#E8C882] hover:text-white border-transparent hover:bg-white/5"
+          >
+            <QrCode size={16} className="text-[#C5A059]" />
+            <span className="whitespace-nowrap">Public Batch View</span>
+          </button>
         </nav>
 
         {/* User Session Profile in Sidebar */}
@@ -353,12 +637,12 @@ export default function App() {
           {/* Sidebar Language selector toggles */}
           <div className="pt-2 border-t border-white/10 flex flex-col gap-1.5">
             <span className="text-[8px] uppercase tracking-wide font-bold text-white/40 font-mono">Select Language / Idioma:</span>
-            <div className="flex gap-1">
-              {(["en", "es", "fr", "pt"] as LanguageCode[]).map((lang) => (
+            <div className="flex flex-wrap gap-1">
+              {(["en", "it", "am", "es", "fr", "pt"] as LanguageCode[]).map((lang) => (
                 <button
                   key={lang}
                   onClick={() => setLanguage(lang)}
-                  className={`flex-1 py-1 text-[10px] uppercase font-bold rounded transition-all cursor-pointer ${
+                  className={`px-2 py-1 text-[10px] uppercase font-bold rounded transition-all cursor-pointer ${
                     language === lang 
                       ? "bg-[#C5A059] text-white" 
                       : "bg-white/10 hover:bg-white/20 text-white/70"
@@ -404,6 +688,14 @@ export default function App() {
 
         {/* Content Wrap */}
         <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6">
+          {/* Firestore Notification Message */}
+          {firestoreMsg && (
+            <div className="p-3 bg-[#FEF9EC] border border-[#C5A059]/40 rounded-xl text-xs font-mono font-bold text-[#8e7135] flex items-center justify-between shadow-xs animate-fade-in">
+              <span>⚡ {firestoreMsg}</span>
+              <button onClick={() => setFirestoreMsg(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer">✕</button>
+            </div>
+          )}
+
           {/* Offline Sync Buffer Box */}
           <OfflineStatusIndicator
             isOffline={isOffline}
@@ -412,85 +704,87 @@ export default function App() {
             onTriggerSync={handleTriggerSync}
           />
 
-          <div className="space-y-6">
-            
-            {activeTab === "map" && (
-              <div className="space-y-6">
-                <MapDashboard
+          {loadingFirestore && farms.length === 0 && batches.length === 0 ? (
+            <div className="py-20 text-center space-y-3">
+              <Loader2 className="animate-spin text-[#C5A059] mx-auto" size={32} />
+              <p className="text-xs font-mono text-gray-500 font-bold uppercase tracking-wider">Connecting to Google Cloud Firestore...</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              
+              {activeTab === "map" && (
+                <div className="space-y-6">
+                  <MapDashboard
+                    farms={farms}
+                    batches={batches}
+                    selectedFarmId={selectedFarmId}
+                    onSelectFarm={setSelectedFarmId}
+                    onRegisterCoordinates={handleRegisterCoordsFromMap}
+                  />
+                  
+                  {/* Visual guidance widgets */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white border border-gray-200 p-5 rounded-xl flex flex-col justify-between shadow-sm">
+                      <span className="text-[10px] font-bold text-[#3D5A40] uppercase tracking-widest mb-2 block font-mono">Field-Ready Map Actions</span>
+                      <p className="text-xs text-gray-600 leading-relaxed">
+                        Agroforestry coordinators can use continuous GPS mappings to record altitude coordinates for newly certified shade-grown lots. Click anywhere on the map above to freeze coordinates and apply them under the <strong>Members Registry</strong> forms.
+                      </p>
+                    </div>
+                    <div className="bg-white border border-gray-200 p-5 rounded-xl flex flex-col justify-between shadow-sm">
+                      <span className="text-[10px] font-bold text-[#C5A059] uppercase tracking-widest mb-2 block font-mono">Transit Lane Optimization</span>
+                      <p className="text-xs text-gray-600 leading-relaxed">
+                        Traceability tracks physical transport vessels starting from deep smallholder cooperative scales (e.g., Sidama, Huila, or Lake Toba), leading to centralized washing wet mills, dry processing sorting facilities, and finally dispatched green cargo freights leaving global seaport terminals.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "farms" && (
+                <FarmCoordinator
                   farms={farms}
                   batches={batches}
                   selectedFarmId={selectedFarmId}
                   onSelectFarm={setSelectedFarmId}
-                  onRegisterCoordinates={handleRegisterCoordsFromMap}
+                  lastCapturedCoords={lastCapturedCoords}
+                  onAddFarm={handleAddFarm}
+                  onRemoveFarm={handleRemoveFarm}
+                  onUpdateFarmPolygon={handleUpdateFarmPolygon}
                 />
-                
-                {/* Visual guidance widgets */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-white border border-gray-200 p-5 rounded-xl flex flex-col justify-between shadow-sm">
-                    <span className="text-[10px] font-bold text-[#3D5A40] uppercase tracking-widest mb-2 block font-mono">Field-Ready Map Actions</span>
-                    <p className="text-xs text-gray-600 leading-relaxed">
-                      Agroforestry coordinators can use continuous GPS mappings to record altitude coordinates for newly certified shade-grown lots. Click anywhere on the map above to freeze coordinates and apply them under the <strong>Members Registry</strong> forms.
-                    </p>
-                  </div>
-                  <div className="bg-white border border-gray-200 p-5 rounded-xl flex flex-col justify-between shadow-sm">
-                    <span className="text-[10px] font-bold text-[#C5A059] uppercase tracking-widest mb-2 block font-mono">Transit Lane Optimization</span>
-                    <p className="text-xs text-gray-600 leading-relaxed">
-                      Traceability tracks physical transport vessels starting from deep smallholder cooperative scales (e.g., Sidama, Huila, or Lake Toba), leading to centralized washing wet mills, dry processing sorting facilities, and finally dispatched green cargo freights leaving global seaport terminals.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+              )}
 
-            {activeTab === "farms" && (
-              <FarmCoordinator
-                farms={farms}
-                selectedFarmId={selectedFarmId}
-                onSelectFarm={setSelectedFarmId}
-                lastCapturedCoords={lastCapturedCoords}
-                onAddFarm={(newFarm) => {
-                  if (isOffline) {
-                    handleQueueOfflineAction("ADD_FARM", newFarm);
-                  } else {
-                    setFarms((prev) => [...prev, newFarm]);
-                    setSelectedFarmId(newFarm.id);
-                  }
-                }}
-                onRemoveFarm={(id) => {
-                  setFarms((prev) => prev.filter(f => f.id !== id));
-                }}
-              />
-            )}
+              {activeTab === "trace" && (
+                <TraceabilityCenter
+                  batches={batches}
+                  farms={farms}
+                  isOffline={isOffline}
+                  language={language}
+                  onOpenPublicVerify={(lot) => setPublicVerifyLot(lot)}
+                  onAddBatch={handleAddBatch}
+                  onUpdateBatch={handleUpdateBatch}
+                  onDeleteBatch={handleDeleteBatch}
+                  supplyChainEvents={supplyChainEvents}
+                  onAddSupplyChainEvent={handleAddSupplyChainEvent}
+                  blockchainTransactions={blockchainTxs}
+                  isLoading={loadingFirestore}
+                />
+              )}
 
-            {activeTab === "trace" && (
-              <TraceabilityCenter
-                batches={batches}
-                farms={farms}
-                isOffline={isOffline}
-                language={language}
-                onAddBatch={(newBatch) => {
-                  if (isOffline) {
-                    handleQueueOfflineAction("ADD_BATCH", newBatch);
-                  } else {
-                    setBatches((prev) => [...prev, newBatch]);
-                  }
-                }}
-              />
-            )}
+              {activeTab === "ai" && (
+                <AIAssistant />
+              )}
 
-            {activeTab === "ai" && (
-              <AIAssistant />
-            )}
-
-            {activeTab === "blockchain" && (
-              <BlockchainAudit
-                farms={farms}
-                isOffline={isOffline}
-                onQueueOfflineAction={handleQueueOfflineAction}
-                blockchainState={blockchainState}
-                onFetchBlockchain={fetchBlockchainLedger}
-              />
-            )}
+              {activeTab === "blockchain" && (
+                <BlockchainAudit
+                  farms={farms}
+                  isOffline={isOffline}
+                  onQueueOfflineAction={handleQueueOfflineAction}
+                  blockchainState={blockchainState}
+                  onFetchBlockchain={fetchBlockchainLedger}
+                  transactions={blockchainTxs}
+                  onAddTransaction={handleMineTransaction}
+                />
+              )}
 
             {activeTab === "media" && (
               <MediaVault
@@ -534,14 +828,15 @@ export default function App() {
             )}
 
           </div>
+        )}
         </div>
 
-        {/* Footer Branding */}
+        {/* Footer Branding & Developer Copyright */}
         <footer className="h-10 px-6 sm:px-8 bg-white border-t border-gray-200 flex justify-between items-center text-[9px] text-gray-400 uppercase tracking-widest shrink-0">
-          <div>BeanTrace Global Ledger · Developed for Worldwide Specialty Cooperatives · Simon Wolde Balango</div>
+          <div>© 2026 Origina Traceability Ledger · Lead Developer: Simon Wolde Balango</div>
           <div className="hidden md:flex gap-4">
             <span>System Status: Optimal</span>
-            <span className="text-[#C5A059]">Data Encrypted & Distributed</span>
+            <span className="text-[#C5A059]">Cloud Firestore Persistent Database</span>
           </div>
         </footer>
       </main>

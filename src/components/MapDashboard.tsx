@@ -4,8 +4,26 @@
  */
 
 import React, { useState, useRef, useEffect } from "react";
-import { MapPin, Info, Layers, Navigation, Compass, Plus, Globe } from "lucide-react";
+import { MapPin, Info, Layers, Navigation, Compass, Plus, Globe, TrendingUp, Flame, Activity, ThermometerSun, Sun, CloudSun, CloudFog, CloudRain, CloudLightning } from "lucide-react";
 import { Farm, ProcessingBatch } from "../types";
+import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, ReferenceArea, ReferenceLine } from "recharts";
+
+const WeatherIcon = ({ type, size = 16, className = "" }: { type: string; size?: number; className?: string }) => {
+  switch (type) {
+    case "Sun":
+      return <Sun size={size} className={`text-amber-500 ${className}`} />;
+    case "CloudSun":
+      return <CloudSun size={size} className={`text-blue-450 ${className}`} />;
+    case "CloudFog":
+      return <CloudFog size={size} className={`text-gray-405 ${className}`} />;
+    case "CloudRain":
+      return <CloudRain size={size} className={`text-blue-505 ${className}`} />;
+    case "CloudLightning":
+      return <CloudLightning size={size} className={`text-purple-505 ${className}`} />;
+    default:
+      return <Sun size={size} className={`text-amber-550 ${className}`} />;
+  }
+};
 
 interface MapDashboardProps {
   farms: Farm[];
@@ -14,6 +32,34 @@ interface MapDashboardProps {
   selectedFarmId?: string;
   onSelectFarm?: (farmId: string) => void;
 }
+
+interface CustomScatterTooltipProps {
+  active?: boolean;
+  payload?: any[];
+}
+
+const CustomScatterTooltip = ({ active, payload }: CustomScatterTooltipProps) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="bg-[#1b1b1b] border border-[#C5A059]/40 p-3 rounded-xl shadow-2xl font-mono text-[10px] space-y-1 text-white w-56">
+        <p className="font-bold border-b border-white/10 pb-1 text-[#C5A059] uppercase tracking-wider">{data.name}</p>
+        <div className="space-y-0.5 text-white/90">
+          <p>Producer: <strong className="text-white">{data.farmer}</strong></p>
+          <p>Altitude: <strong className="text-white">{data.altitude} m.a.s.l.</strong></p>
+          <p>Volume: <strong className="text-white">{data.capacity} bags (60kg)</strong></p>
+          <p>Plot Size: <strong className="text-white">{data.size} Ha</strong></p>
+          <p>Avg SCA: <strong className="text-white bg-[#C5A059]/20 px-1 py-0.2 rounded text-[9px] font-sans inline-block">{data.cuppingScore} Score</strong></p>
+        </div>
+        <div className="pt-1 border-t border-white/10 text-[9px] text-white/45 flex justify-between">
+          <span>{data.region}</span>
+          <span>{data.country}</span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
 export default function MapDashboard({
   farms,
@@ -25,6 +71,8 @@ export default function MapDashboard({
   const [mapStyle, setMapStyle] = useState<"terrain" | "satellite">("terrain");
   const [showBoundaries, setShowBoundaries] = useState(true);
   const [showRoutes, setShowRoutes] = useState(true);
+  const [showHeatmap, setShowHeatmap] = useState(true);
+  const [onlyHighYieldZones, setOnlyHighYieldZones] = useState(false);
   const [hoveredNode, setHoveredNode] = useState<{ name: string; type: string; info: string } | null>(null);
   const [cursorCoords, setCursorCoords] = useState({ lat: 6.25, lng: 38.30, altitude: 1950 });
   const [pinnedMarker, setPinnedMarker] = useState<{ lat: number; lng: number; alt: number } | null>(null);
@@ -33,6 +81,70 @@ export default function MapDashboard({
 
   // Focus on selected farm coordinates
   const activeFarm = farms.find(f => f.id === selectedFarmId);
+
+  const [weather, setWeather] = useState<{
+    farmName: string;
+    latitude: number;
+    longitude: number;
+    altitude: number;
+    daily: Array<{
+      date: string;
+      dayName: string;
+      maxTemp: number;
+      minTemp: number;
+      rain: number;
+      condition: string;
+      icon: string;
+    }>;
+    insight: string;
+    searchGrounded?: boolean;
+    searchSources?: Array<{ title: string; url: string }>;
+    searchQueries?: string[];
+  } | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherError, setWeatherError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!activeFarm) {
+      setWeather(null);
+      return;
+    }
+
+    let active = true;
+    const fetchWeather = async () => {
+      setWeatherLoading(true);
+      setWeatherError(null);
+      try {
+        const res = await fetch(
+          `/api/weather?lat=${activeFarm.latitude}&lng=${activeFarm.longitude}&alt=${activeFarm.altitude}&farmName=${encodeURIComponent(
+            activeFarm.name
+          )}`
+        );
+        if (!res.ok) {
+          throw new Error("Local telemetry satellite link offline.");
+        }
+        const data = await res.json();
+        if (active) {
+          setWeather(data);
+        }
+      } catch (err: any) {
+        console.error("Telemetry forecast syncing failed:", err);
+        if (active) {
+          setWeatherError(err.message || "Coordinate tracking error.");
+        }
+      } finally {
+        if (active) {
+          setWeatherLoading(false);
+        }
+      }
+    };
+
+    fetchWeather();
+
+    return () => {
+      active = false;
+    };
+  }, [activeFarm]);
 
   // Translate lat/lng to responsive SVG dimensions
   // East Africa Coffee Belt coordinates mapped to [100px - 700px] bounds
@@ -107,13 +219,19 @@ export default function MapDashboard({
     });
   };
 
-  // Boundary shape definitions relative to farm seeds
+  // Boundary shape definitions relative to farm seeds and EUDR polygons
   const getBoundaryPath = (farm: Farm) => {
+    if (farm.polygon && farm.polygon.length >= 3) {
+      return farm.polygon.map(([lng, lat]) => {
+        const pt = getSvgCoords(lat, lng);
+        return `${pt.numX.toFixed(2)},${pt.numY.toFixed(2)}`;
+      }).join(" ");
+    }
     const central = getSvgCoords(farm.latitude, farm.longitude);
-    const radius = 2.4; // visual size of boundary
+    const radius = Math.max(1.8, Math.min(3.8, (farm.sizeHectares || 3) * 0.55));
     // Draw an organic agricultural plot boundary poly
     return `${central.numX - radius},${central.numY - radius} 
-            ${central.numX + radius + 1},${central.numY - radius + 1.5} 
+            ${central.numX + radius + 1},${central.numY - radius + 1.2} 
             ${central.numX + radius - 0.5},${central.numY + radius + 1} 
             ${central.numX - radius - 1},${central.numY + radius - 0.5}`;
   };
@@ -172,6 +290,19 @@ export default function MapDashboard({
               <label className="flex items-center gap-2 py-1 cursor-pointer">
                 <input
                   type="checkbox"
+                  checked={showHeatmap}
+                  onChange={(e) => setShowHeatmap(e.target.checked)}
+                  className="rounded border-gray-300 text-[#C5A059] bg-white focus:ring-0 focus:ring-offset-0"
+                />
+                <span className="text-xs text-gray-800 font-bold font-sans flex items-center gap-1.5">
+                  <Flame size={13} className="text-[#C5A059]" />
+                  Altitude-Yield Thermal Heatmap
+                </span>
+              </label>
+
+              <label className="flex items-center gap-2 py-1 cursor-pointer">
+                <input
+                  type="checkbox"
                   checked={showBoundaries}
                   onChange={(e) => setShowBoundaries(e.target.checked)}
                   className="rounded border-gray-300 text-[#3D5A40] bg-white focus:ring-0 focus:ring-offset-0"
@@ -187,6 +318,18 @@ export default function MapDashboard({
                   className="rounded border-gray-300 text-[#3D5A40] bg-white focus:ring-0 focus:ring-offset-0"
                 />
                 <span className="text-xs text-gray-700 font-semibold font-sans">Export Transportation Avenues</span>
+              </label>
+
+              <label className="flex items-center gap-2 py-1 cursor-pointer pt-1 border-t border-gray-200">
+                <input
+                  type="checkbox"
+                  checked={onlyHighYieldZones}
+                  onChange={(e) => setOnlyHighYieldZones(e.target.checked)}
+                  className="rounded border-gray-300 text-[#C5A059] bg-white focus:ring-0 focus:ring-offset-0"
+                />
+                <span className="text-[11px] text-[#8e7135] font-bold font-mono">
+                  Highlight High-Altitude High-Yield (≥1800m, ≥100 Bags)
+                </span>
               </label>
             </div>
           </div>
@@ -225,14 +368,109 @@ export default function MapDashboard({
         </div>
 
         {/* Selected Farm Information Bubble */}
-        {activeFarm && (
-          <div className="p-3 bg-[#FDF5E6] border border-[#C5A059]/30 rounded-xl space-y-1 shadow-inner">
+        {activeFarm ? (
+          <div className="p-3 bg-[#FDF5E6] border border-[#C5A059]/30 rounded-xl space-y-1.5 shadow-inner">
             <span className="text-[9px] text-[#C5A059] uppercase font-mono font-bold">Active Selection Focus</span>
             <h4 className="text-sm font-bold text-gray-800">{activeFarm.name}</h4>
-            <div className="text-xs text-gray-600 space-y-1 font-sans">
-              <p>Farmer: {activeFarm.farmerName}</p>
+            <div className="text-xs text-gray-650 space-y-0.5 font-sans leading-tight">
+              <p>Farmer: <strong className="text-gray-800">{activeFarm.farmerName}</strong></p>
               <p className="font-mono text-[10px]">Altitude: {activeFarm.altitude} m.a.s.l.</p>
             </div>
+
+            {/* 5-Day Weather Forecast Sub-panel */}
+            <div className="mt-3 pt-3 border-t border-gray-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-gray-800 font-bold text-xs font-sans">
+                  <ThermometerSun size={15} className="text-[#C5A059]" />
+                  <span>Microclimate Forecast (5-Day)</span>
+                </div>
+                {weatherLoading && <span className="text-[9px] font-mono text-[#C5A059] animate-pulse font-bold">Syncing...</span>}
+              </div>
+
+              {weatherLoading && (
+                <div className="p-3 bg-gray-50 border border-gray-150 rounded-lg flex flex-col items-center justify-center space-y-1.5 py-4 animate-pulse">
+                  <Globe className="text-[#3D5A40]/40 animate-spin-slow" size={16} />
+                  <p className="text-[9px] text-gray-400 font-mono">Retrieving satellite telemetry...</p>
+                </div>
+              )}
+
+              {weatherError && !weatherLoading && (
+                <div className="p-2 bg-red-50 text-red-700 text-[10px] border border-red-200 rounded-lg font-mono">
+                  ⚠️ {weatherError}
+                </div>
+              )}
+
+              {weather && !weatherLoading && !weatherError && (
+                <div className="space-y-2 text-left">
+                  {/* Daily list / scroll horizontal grid */}
+                  <div className="grid grid-cols-5 gap-1 pt-1">
+                    {weather.daily.map((day, idx) => (
+                      <div key={idx} className="bg-white border border-gray-200 rounded-lg p-1 text-center flex flex-col items-center justify-between shadow-xs hover:border-[#C5A059]/45 transition-all">
+                        <span className="text-[8.5px] font-bold text-gray-550 uppercase tracking-tight font-mono leading-none">{day.dayName.substring(0, 3)}</span>
+                        <div className="my-1 flex justify-center">
+                          <WeatherIcon type={day.icon} size={14} />
+                        </div>
+                        <div className="text-[9.5px] font-bold text-gray-850 space-y-0.5 leading-none">
+                          <div>{Math.round(day.maxTemp)}°</div>
+                          <div className="text-[8.5px] text-gray-400 font-semibold">{Math.round(day.minTemp)}°</div>
+                        </div>
+                        {day.rain > 0 && (
+                          <div className="text-[7.5px] text-blue-500 font-extrabold font-mono mt-0.5 leading-none">
+                            {day.rain}mm
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Gemini AI advisory insight block with Google Search Grounding */}
+                  {weather.insight && (
+                    <div className="p-2.5 bg-[#FAF6EE] border-l-2 border-[#C5A059] rounded-r-lg space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="inline-flex items-center justify-center bg-[#C5A059]/15 text-[#886C32] text-[8px] font-mono font-bold px-1.5 py-0.5 rounded uppercase">
+                          AI Climate Analysis
+                        </span>
+                        {weather.searchGrounded && (
+                          <span className="inline-flex items-center gap-1 text-[8px] font-mono font-bold text-[#3D5A40] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                            <Globe size={9} /> Google Search Grounded
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[9.5px] text-gray-700 leading-normal font-sans text-left">
+                        {weather.insight}
+                      </p>
+                      {weather.searchSources && weather.searchSources.length > 0 && (
+                        <div className="pt-1 border-t border-[#C5A059]/20 space-y-0.5">
+                          <span className="text-[7.5px] font-mono text-gray-400 block font-bold uppercase">Telemetry Sources:</span>
+                          <div className="flex flex-wrap gap-1">
+                            {weather.searchSources.slice(0, 2).map((s, idx) => (
+                              <a
+                                key={idx}
+                                href={s.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[8px] font-mono text-[#886C32] hover:underline bg-white/70 px-1.5 py-0.2 rounded border border-[#C5A059]/30 truncate max-w-[140px]"
+                                title={s.title}
+                              >
+                                ↗ {s.title}
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-xl space-y-2 text-center shadow-xs">
+            <ThermometerSun className="text-gray-400 mx-auto animate-pulse" size={24} />
+            <h5 className="text-xs font-bold text-gray-700 font-sans">Microclimate Weather Telemetry</h5>
+            <p className="text-[10px] text-gray-500 font-sans leading-relaxed">
+              Select any coffee cooperative plot outline on the interactive map to query 5-day crop weather details and AI-grounded ripening analysis.
+            </p>
           </div>
         )}
       </div>
@@ -264,6 +502,79 @@ export default function MapDashboard({
           onMouseMove={handleMouseMove}
           className="absolute inset-0 w-full h-full cursor-crosshair z-10"
         >
+          {/* SVG Definitions for Thermal Heatmap Gradients */}
+          <defs>
+            <radialGradient id="highYieldHeatGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#C5A059" stopOpacity="0.85" />
+              <stop offset="45%" stopColor="#EA580C" stopOpacity="0.45" />
+              <stop offset="100%" stopColor="#EA580C" stopOpacity="0" />
+            </radialGradient>
+            <radialGradient id="highAltHeatGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#D97706" stopOpacity="0.65" />
+              <stop offset="55%" stopColor="#D97706" stopOpacity="0.25" />
+              <stop offset="100%" stopColor="#D97706" stopOpacity="0" />
+            </radialGradient>
+            <radialGradient id="midAltHeatGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#3D5A40" stopOpacity="0.6" />
+              <stop offset="60%" stopColor="#3D5A40" stopOpacity="0.2" />
+              <stop offset="100%" stopColor="#3D5A40" stopOpacity="0" />
+            </radialGradient>
+            <radialGradient id="standardHeatGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#64748B" stopOpacity="0.4" />
+              <stop offset="100%" stopColor="#64748B" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+
+          {/* Altitude-Yield Thermal Heatmap Overlay */}
+          {showHeatmap && (
+            <g id="heatmap-thermal-layer" className="transition-opacity duration-300">
+              {farms.map((farm) => {
+                const central = getSvgCoords(farm.latitude, farm.longitude);
+                const isHighBelt = farm.altitude >= 1800 && farm.capacityBags >= 100;
+                const isHighAlt = farm.altitude >= 1800;
+                const isMidAlt = farm.altitude >= 1650;
+                
+                // Radius proportional to harvest volume capacity
+                const radius = Math.max(18, Math.min(48, Math.round((farm.capacityBags / 140) * 44)));
+                const gradientId = isHighBelt 
+                  ? "url(#highYieldHeatGlow)" 
+                  : isHighAlt 
+                    ? "url(#highAltHeatGlow)" 
+                    : isMidAlt 
+                      ? "url(#midAltHeatGlow)" 
+                      : "url(#standardHeatGlow)";
+
+                const isDimmed = onlyHighYieldZones && !isHighBelt;
+
+                return (
+                  <g key={`heat-${farm.id}`} opacity={isDimmed ? 0.15 : 1} className="transition-all duration-300">
+                    {/* Thermal aura */}
+                    <circle
+                      cx={central.x}
+                      cy={central.y}
+                      r={radius}
+                      fill={gradientId}
+                      className={isHighBelt ? "animate-pulse" : ""}
+                    />
+                    {/* Pulsating ring for high-yield high-altitude champion zones */}
+                    {isHighBelt && (
+                      <circle
+                        cx={central.x}
+                        cy={central.y}
+                        r={radius * 1.15}
+                        fill="none"
+                        stroke="#C5A059"
+                        strokeWidth="1.2"
+                        strokeDasharray="3 3"
+                        className="animate-spin-slow opacity-60"
+                      />
+                    )}
+                  </g>
+                );
+              })}
+            </g>
+          )}
+
           {/* A. Elevation Altitude Bands Reference Legend (Horizontal lines) */}
           {mapStyle === "terrain" && (
             <>
@@ -441,6 +752,294 @@ export default function MapDashboard({
         )}
 
       </div>
+
+      {/* 3. Altitude vs Harvest Volume Heatmap Analytics Matrix & Distribution Grid */}
+      <div className="col-span-1 lg:col-span-4 border-t border-gray-150 pt-6 mt-2 space-y-6 text-left">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-1.5 text-[#C5A059] mb-1 font-bold">
+              <ThermometerSun size={16} className="animate-pulse" />
+              <span className="text-[10px] uppercase font-mono tracking-wider">Meteorological Yield Analysis</span>
+            </div>
+            <h3 className="text-base font-bold text-gray-900 font-sans">Altitude vs. Harvest Volume Correlation Heatmap</h3>
+            <p className="text-xs text-gray-500 font-medium">
+              Geological overlay identifying premium growing zones and offtake capacity volumes (60kg bags) by altitude range.
+            </p>
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setOnlyHighYieldZones(false)}
+              className={`text-[10px] font-mono px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
+                !onlyHighYieldZones 
+                  ? "bg-[#3D5A40] text-white border-[#3D5A40] font-bold" 
+                  : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+              }`}
+            >
+              All Microclimates ({farms.length})
+            </button>
+            <button
+              onClick={() => setOnlyHighYieldZones(true)}
+              className={`text-[10px] font-mono px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-all cursor-pointer ${
+                onlyHighYieldZones 
+                  ? "bg-[#C5A059] text-black border-[#C5A059] font-bold shadow-sm" 
+                  : "bg-amber-50 text-[#8e7135] border-[#C5A059]/40 hover:bg-[#FAF0DD]"
+              }`}
+            >
+              <Flame size={12} className={onlyHighYieldZones ? "animate-pulse" : ""} />
+              High-Yield High-Altitude Zone (≥1800m, ≥100 Bags)
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 pt-1">
+          {/* Left Side: 2D Heatmap Matrix */}
+          <div className="xl:col-span-5 p-5 border border-gray-200 bg-[#FBFBFA]/60 rounded-2xl flex flex-col justify-between space-y-5">
+            <div>
+              <div className="flex items-center justify-between border-b border-gray-150 pb-2.5 mb-3">
+                <span className="text-[10px] font-mono font-bold text-gray-500 uppercase">2D DENSITY CORRELATION MATRIX</span>
+                <span className="text-[10px] text-[#3D5A40] font-mono bg-[#EDF3EE] p-1 px-2 rounded-lg font-bold">Heat Value: Cooperatives</span>
+              </div>
+              <p className="text-[11px] text-gray-500 leading-normal mb-1">
+                Visual matrix grouping farms by altitude range (X) and capacity volume threshold (Y). Populated sectors reflect local cluster concentrations.
+              </p>
+            </div>
+
+            {/* Direct CSS Grid Matrix representation */}
+            <div className="grid grid-cols-4 gap-2">
+              {/* Col list/legends */}
+              <div className="text-[9px] font-mono font-bold text-gray-400 uppercase flex items-center justify-center text-center">
+                Volume / Alt
+              </div>
+              <div className="text-[9px] font-mono font-bold text-gray-500 uppercase text-center bg-gray-55/60 py-1.5 rounded-lg">
+                Low &lt;1650m
+              </div>
+              <div className="text-[9px] font-mono font-bold text-gray-500 uppercase text-center bg-gray-55/60 py-1.5 rounded-lg">
+                Mid 1650-1900m
+              </div>
+              <div className="text-[9px] font-mono font-bold text-gray-500 uppercase text-center bg-gray-55/60 py-1.5 rounded-lg">
+                High 1900m+
+              </div>
+
+              {/* Rows top down: Volume Large, Med, Small */}
+              {/* Row 1: Large Volume (120+ Bags) */}
+              <div className="text-[9px] font-mono font-bold text-gray-400 uppercase flex items-center justify-start pr-1">
+                Large (120+)
+              </div>
+              {/* Low & Large */}
+              <div className="p-2 bg-gray-50/40 border border-gray-150 border-dashed rounded-xl h-20 flex flex-col items-center justify-center">
+                <span className="text-[11px] font-mono font-bold text-gray-350">0</span>
+              </div>
+              {/* Mid & Large */}
+              <div className="p-2 bg-[#EDF2EE] border border-[#3D5A40]/35 hover:border-[#3D5A40] rounded-xl h-20 flex flex-col justify-between transition-colors shadow-sm cursor-help relative group">
+                <div className="flex items-center justify-between">
+                  <span className="text-[8px] font-mono font-bold text-[#3D5A40] uppercase">M-L ZONE</span>
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 hover:scale-125 transition-transform" />
+                </div>
+                <div className="text-center font-bold text-base text-gray-900 select-none">
+                  {farms.filter(f => f.altitude >= 1650 && f.altitude < 1900 && f.capacityBags >= 120).length}
+                </div>
+                <span className="text-[7.5px] font-mono font-semibold text-gray-500 truncate block text-center">
+                  {farms.filter(f => f.altitude >= 1650 && f.altitude < 1900 && f.capacityBags >= 120).map(f => f.name.replace(" Organics", "").replace(" Estate", "")).join(", ") || "None"}
+                </span>
+                {/* Tooltip trigger */}
+                <div className="absolute inset-0 bg-white/0 select-none" title="Farms in this tier demonstrate remarkable yields inside the Mid-Altitude envelope." />
+              </div>
+              {/* High & Large */}
+              <div className="p-2 bg-[#FEF9EC] border border-[#C5A059]/40 hover:border-[#C5A059] rounded-xl h-20 flex flex-col justify-between transition-colors shadow-sm cursor-help relative group">
+                <div className="flex items-center justify-between">
+                  <span className="text-[8px] font-mono font-bold text-[#C5A059] uppercase">H-L ZONE</span>
+                  <Flame size={10} className="text-[#C5A059] animate-pulse" />
+                </div>
+                <div className="text-center font-bold text-base text-amber-950 select-none">
+                  {farms.filter(f => f.altitude >= 1900 && f.capacityBags >= 120).length}
+                </div>
+                <span className="text-[7.5px] font-mono font-semibold text-amber-900/60 truncate block text-center">
+                  {farms.filter(f => f.altitude >= 1900 && f.capacityBags >= 120).map(f => f.name.replace(" Estate", "")).join(", ") || "None"}
+                </span>
+                <div className="absolute inset-0 bg-white/0 select-none" title="Highly rare niche: Peak microclimates with extraordinary capacity scores." />
+              </div>
+
+              {/* Row 2: Medium Volume (90-120 Bags) */}
+              <div className="text-[9px] font-mono font-bold text-gray-400 uppercase flex items-center justify-start pr-1">
+                Mid (90-120)
+              </div>
+              {/* Low & Med */}
+              <div className="p-2 bg-gray-50/40 border border-gray-150 border-dashed rounded-xl h-20 flex flex-col items-center justify-center">
+                <span className="text-[11px] font-mono font-bold text-gray-350">0</span>
+              </div>
+              {/* Mid & Med */}
+              <div className="p-2 bg-gray-50/40 border border-gray-150 border-dashed rounded-xl h-20 flex flex-col items-center justify-center">
+                <span className="text-[11px] font-mono font-bold text-gray-350">0</span>
+              </div>
+              {/* High & Med */}
+              <div className="p-2 bg-[#FEF9EC] border border-[#C5A059]/30 hover:border-[#C5A059] rounded-xl h-20 flex flex-col justify-between transition-colors shadow-sm cursor-help relative group">
+                <div className="flex items-center justify-between">
+                  <span className="text-[8px] font-mono font-bold text-[#C5A059] uppercase">H-M BELT</span>
+                  <span className="h-2 w-2 rounded-full bg-amber-400" />
+                </div>
+                <div className="text-center font-bold text-base text-amber-950 select-none">
+                  {farms.filter(f => f.altitude >= 1900 && f.capacityBags >= 90 && f.capacityBags < 120).length}
+                </div>
+                <span className="text-[7.5px] font-mono font-semibold text-amber-900/75 truncate block text-center font-sans font-bold">
+                  {farms.filter(f => f.altitude >= 1900 && f.capacityBags >= 90 && f.capacityBags < 120).map(f => f.name.replace(" Estate", "")).join(", ") || "None"}
+                </span>
+                <div className="absolute inset-0 bg-white/0 select-none" title="The classic specialty profile: High altitudes coupled with solid cooperative target volumes." />
+              </div>
+
+              {/* Row 3: Small Volume (<90 Bags) */}
+              <div className="text-[9px] font-mono font-bold text-gray-400 uppercase flex items-center justify-start pr-1">
+                Small (&lt;90)
+              </div>
+              {/* Low & Small */}
+              <div className="p-2 bg-[#F4F5F7] border border-gray-200 hover:border-gray-350 rounded-xl h-20 flex flex-col justify-between transition-colors shadow-sm cursor-help relative">
+                <div className="flex items-center justify-between">
+                  <span className="text-[8px] font-mono font-bold text-gray-500 uppercase">L-S PLOT</span>
+                  <span className="h-2 w-2 rounded-full bg-slate-350" />
+                </div>
+                <div className="text-center font-bold text-base text-gray-700 select-none">
+                  {farms.filter(f => f.altitude < 1650 && f.capacityBags < 90).length}
+                </div>
+                <span className="text-[7.5px] font-mono font-semibold text-gray-500 truncate block text-center">
+                  {farms.filter(f => f.altitude < 1650 && f.capacityBags < 90).map(f => f.name.replace(" Estate", "")).join(", ") || "None"}
+                </span>
+                <div className="absolute inset-0 bg-white/0 select-none" title="Lower altitude, micro-yield plots targeting regional baseline varieties." />
+              </div>
+              {/* Mid & Small */}
+              <div className="p-2 bg-gray-50/40 border border-gray-150 border-dashed rounded-xl h-20 flex flex-col items-center justify-center">
+                <span className="text-[11px] font-mono font-bold text-gray-350">0</span>
+              </div>
+              {/* High & Small */}
+              <div className="p-2 bg-[#EDF2EE]/80 border border-[#3D5A40]/25 hover:border-[#3D5A40] rounded-xl h-20 flex flex-col justify-between transition-colors shadow-sm cursor-help relative">
+                <div className="flex items-center justify-between">
+                  <span className="text-[8px] font-mono font-bold text-[#3D5A40] uppercase">H-S PLOT</span>
+                  <span className="h-2 w-2 rounded-full bg-emerald-350" />
+                </div>
+                <div className="text-center font-bold text-base text-gray-800 select-none">
+                  {farms.filter(f => f.altitude >= 1900 && f.capacityBags < 90).length}
+                </div>
+                <span className="text-[7.5px] font-mono font-semibold text-gray-550 truncate block text-center">
+                  {farms.filter(f => f.altitude >= 1900 && f.capacityBags < 90).map(f => f.name.replace(" Farm", "").replace(" Aged ", "")).join(", ") || "None"}
+                </span>
+                <div className="absolute inset-0 bg-white/0 select-none" title="Extremely high altitude but highly boutique yields. Yield density is high, volume is boutique." />
+              </div>
+            </div>
+
+            <div className="text-[10px] bg-amber-50/45 p-3 rounded-lg border border-amber-200/35 text-amber-900 leading-normal font-sans font-medium">
+              ⚡ <strong>Zone Highlight:</strong> The shaded high-altitude density bands represent microclimates with extraordinary capacity scores, capturing optimal solar radiation patterns.
+            </div>
+          </div>
+
+          {/* Right Side: Recharts Scatter Plot */}
+          <div className="xl:col-span-7 border border-gray-200 bg-white rounded-2xl p-4 flex flex-col justify-between space-y-4 shadow-sm text-left font-sans">
+            <div className="flex items-center justify-between border-b border-gray-150 pb-2">
+              <span className="text-[10px] font-mono font-bold text-gray-500 uppercase">HIGH-RESOLUTION ALTITUDE VS DENSITY SCATTER</span>
+              <span className="text-[10px] text-gray-500 font-mono">X: Altitude (m) | Y: Volume (Bags)</span>
+            </div>
+
+            <div className="w-full h-64 md:h-72 relative bg-gray-50/25 border border-gray-150 rounded-xl p-3">
+              <ResponsiveContainer width="100%" height="100%">
+                <ScatterChart margin={{ top: 20, right: 20, bottom: -5, left: -25 }}>
+                  <XAxis 
+                    type="number" 
+                    dataKey="altitude" 
+                    name="Altitude" 
+                    unit="m" 
+                    domain={[1400, 2300]}
+                    tick={{ fontSize: 9, fontFamily: 'JetBrains Mono', fill: '#6B7280' }}
+                  />
+                  <YAxis 
+                    type="number" 
+                    dataKey="capacity" 
+                    name="Volume" 
+                    unit=" Bags" 
+                    domain={[50, 160]}
+                    tick={{ fontSize: 9, fontFamily: 'JetBrains Mono', fill: '#6B7280' }}
+                  />
+                  <ZAxis 
+                    type="number" 
+                    dataKey="size" 
+                    range={[60, 320]} 
+                    name="Hectares" 
+                  />
+                  
+                  {/* Reference Golden Zone Boundary Lines */}
+                  <ReferenceLine 
+                    x={1800} 
+                    stroke="#C5A059" 
+                    strokeWidth={1.5} 
+                    strokeDasharray="4 4" 
+                  />
+                  <ReferenceLine 
+                    y={100} 
+                    stroke="#C5A059" 
+                    strokeWidth={1.5} 
+                    strokeDasharray="4 4" 
+                  />
+                  
+                  <RechartsTooltip content={<CustomScatterTooltip />} />
+                  
+                  <Scatter 
+                    name="Members" 
+                    data={farms.map(f => {
+                      const fBatches = batches.filter(b => b.farmId === f.id);
+                      const avgCuppingScore = fBatches.length > 0 
+                        ? Number((fBatches.reduce((acc, b) => acc + b.cuppingScore, 0) / fBatches.length).toFixed(1))
+                        : 85; 
+                      return {
+                        id: f.id,
+                        name: f.name,
+                        farmer: f.farmerName,
+                        altitude: f.altitude,
+                        capacity: f.capacityBags,
+                        size: f.sizeHectares,
+                        cooperative: f.cooperative,
+                        region: f.region,
+                        country: f.country,
+                        cuppingScore: avgCuppingScore
+                      };
+                    })} 
+                    fill="#3D5A40"
+                    onClick={(n: any) => {
+                      if (onSelectFarm && n?.id) {
+                        onSelectFarm(n.id);
+                      }
+                    }}
+                    cursor="pointer"
+                  >
+                    {farms.map((f, index) => {
+                      const isHighBelt = f.altitude >= 1800 && f.capacityBags >= 100;
+                      const opacity = onlyHighYieldZones 
+                        ? (isHighBelt ? 1.0 : 0.15) 
+                        : (f.id === selectedFarmId ? 1.0 : 0.85);
+                      const strokeW = isHighBelt ? 2.5 : (f.id === selectedFarmId ? 3 : 1);
+                      return (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={isHighBelt ? "#C5A059" : "#3D5A40"}
+                          stroke={isHighBelt ? "#9c7c3d" : "#243c2b"}
+                          strokeWidth={strokeW}
+                          fillOpacity={opacity}
+                        />
+                      );
+                    })}
+                  </Scatter>
+                </ScatterChart>
+              </ResponsiveContainer>
+              
+              {/* Inline Watermark label for golden zone */}
+              <div className="absolute top-5 right-5 text-[8.5px] font-mono text-[#C5A059] bg-[#FEF9EC] border border-[#C5A059]/35 px-2 py-0.5 rounded font-bold pointer-events-none select-none">
+                Optimal Specialty Canopy (1800m+)
+              </div>
+            </div>
+
+            <div className="text-[10.5px] font-sans text-gray-550 leading-relaxed font-semibold">
+              ⭐ <strong>Bubble Size Note:</strong> Nodes represent co-op members. The bubble radius scales proportionally to plot size (Hectares). Clicking any node automatically focuses map geolocation and loads altitude boundaries.
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 }

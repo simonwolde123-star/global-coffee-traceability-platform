@@ -20,7 +20,7 @@ interface AppState {
  */
 export function useAppState(initialState: AppState) {
   const [state, setState] = useState(initialState);
-  const saveTimeoutRef = useRef<NodeJS.Timeout>();
+  const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   // Debounced save to localStorage
   const saveToStorage = useCallback(() => {
@@ -171,7 +171,7 @@ export function useThrottleRAF<T>(value: T): T {
  * Hook for previous value tracking
  */
 export function usePrevious<T>(value: T): T | undefined {
-  const ref = useRef<T>();
+  const ref = useRef<T | undefined>(undefined);
 
   useEffect(() => {
     ref.current = value;

@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { Sparkles, MessageSquare, BrainCircuit, Activity, Sprout, Send, RefreshCw, FileText } from "lucide-react";
+import { Sparkles, MessageSquare, BrainCircuit, Activity, Sprout, Send, RefreshCw, FileText, Globe, Search, ExternalLink } from "lucide-react";
 
 // Mock leaf assets designed for instantly clickable diagnosis checks
 const SAMPLE_DISEASE_MOCKS = [
@@ -92,7 +92,7 @@ async function fetchImageAsBase64(url: string): Promise<string> {
 }
 
 export default function AIAssistant() {
-  const [activeTab, setActiveTab] = useState<"diagnostics" | "forecaster" | "chat">("diagnostics");
+  const [activeTab, setActiveTab] = useState<"diagnostics" | "forecaster" | "chat" | "searchIntel">("diagnostics");
 
   // --- DIAGNOSTICS STATE ---
   const [selectedLeafIdx, setSelectedLeafIdx] = useState<number | null>(0);
@@ -114,10 +114,50 @@ export default function AIAssistant() {
 
   // --- CHAT STATE ---
   const [chatInput, setChatInput] = useState("");
-  const [messages, setMessages] = useState<Array<{ sender: "user" | "copilot"; text: string }>>([
+  const [useSearchGrounding, setUseSearchGrounding] = useState(true);
+  const [messages, setMessages] = useState<Array<{ 
+    sender: "user" | "copilot"; 
+    text: string;
+    sources?: Array<{ title: string; url: string }>;
+  }>>([
     { sender: "copilot", text: "Hello! I am the **Origina Coffee Copilot**, trained on global high-altitude coffee cultivation, multi-regional shade-canopy indexes, and Fairtrade compliance standards. Ask me any agro-science, processing, or logistics question spanning South/Central America, East Africa, or Asia-Pacific." }
   ]);
   const [chatting, setChatting] = useState(false);
+
+  // --- SEARCH GROUNDING INTEL STATE ---
+  const [intelQuery, setIntelQuery] = useState("");
+  const [intelLoading, setIntelLoading] = useState(false);
+  const [intelResult, setIntelResult] = useState<{
+    text: string;
+    sources: Array<{ title: string; url: string }>;
+    queries: string[];
+  } | null>(null);
+
+  const runSearchIntel = async (presetQuery?: string) => {
+    const queryToRun = presetQuery || intelQuery;
+    if (!queryToRun.trim() && !presetQuery) return;
+    setIntelLoading(true);
+
+    try {
+      const res = await fetch("/api/ai/search-intel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: queryToRun })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setIntelResult({
+          text: data.text,
+          sources: data.sources || [],
+          queries: data.searchQueries || []
+        });
+      }
+    } catch (e) {
+      console.error("Search Intel Error:", e);
+    } finally {
+      setIntelLoading(false);
+    }
+  };
 
   // Triggering visual image diagnostic examination
   const runDiagnosticAnalysis = async () => {
@@ -209,12 +249,16 @@ export default function AIAssistant() {
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userText })
+        body: JSON.stringify({ message: userText, useSearchGrounding })
       });
 
       if (res.ok) {
         const data = await res.json();
-        setMessages((prev) => [...prev, { sender: "copilot", text: data.reply }]);
+        setMessages((prev) => [...prev, { 
+          sender: "copilot", 
+          text: data.reply,
+          sources: data.sources || []
+        }]);
       } else {
         setMessages((prev) => [...prev, { sender: "copilot", text: "Cooperative core is currently busy. Please review structural guidelines or reconnect." }]);
       }
@@ -275,6 +319,20 @@ export default function AIAssistant() {
         >
           <MessageSquare size={14} />
           Coffee Copilot Chat
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab("searchIntel");
+            if (!intelResult && !intelLoading) runSearchIntel();
+          }}
+          className={`flex-1 py-3 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            activeTab === "searchIntel" 
+              ? "bg-[#3D5A40] text-white shadow-sm" 
+              : "text-gray-500 hover:text-gray-900 hover:bg-gray-100/55"
+          }`}
+        >
+          <Globe size={14} className="text-[#C5A059]" />
+          Google Search Intel
         </button>
       </div>
 
@@ -555,6 +613,24 @@ export default function AIAssistant() {
         {activeTab === "chat" && (
           <div className="space-y-4">
             <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+              
+              {/* Google Search Grounding Toggle Banner */}
+              <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-150">
+                <div className="flex items-center gap-1.5 text-xs text-gray-700 font-semibold">
+                  <Globe size={15} className="text-[#C5A059]" />
+                  <span>Google Search Grounding Engine</span>
+                </div>
+                <label className="flex items-center gap-1.5 cursor-pointer text-[10px] font-mono text-gray-600 font-bold">
+                  <input
+                    type="checkbox"
+                    checked={useSearchGrounding}
+                    onChange={(e) => setUseSearchGrounding(e.target.checked)}
+                    className="rounded border-gray-300 text-[#C5A059] bg-white focus:ring-0 focus:ring-offset-0"
+                  />
+                  <span>Ground with Real-Time Web Data</span>
+                </label>
+              </div>
+
               <div className="h-[280px] overflow-y-auto pr-2 space-y-4 flex flex-col font-sans custom-scrollbar">
                 {messages.map((msg, idx) => (
                   <div
@@ -565,13 +641,44 @@ export default function AIAssistant() {
                         : "bg-gray-50 border border-gray-250 text-gray-700 self-start font-medium"
                     }`}
                   >
-                    <span className="text-[9px] font-mono block text-gray-400 mb-1 font-bold">
-                      {msg.sender === "user" ? "COOP AGENT" : "ORIGINA COPILOT"}
-                    </span>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="text-[9px] font-mono font-bold text-gray-400">
+                        {msg.sender === "user" ? "COOP AGENT" : "ORIGINA COPILOT"}
+                      </span>
+                      {msg.sources && msg.sources.length > 0 && (
+                        <span className="text-[8px] font-mono font-bold text-[#3D5A40] bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 flex items-center gap-1">
+                          <Globe size={8} /> Search Grounded
+                        </span>
+                      )}
+                    </div>
                     {msg.sender === "copilot" ? (
                       <div className="space-y-2">{renderAgMarkdown(msg.text)}</div>
                     ) : (
                       <p className="font-semibold">{msg.text}</p>
+                    )}
+
+                    {/* Grounding Web Citations */}
+                    {msg.sources && msg.sources.length > 0 && (
+                      <div className="mt-2.5 pt-2 border-t border-gray-200 space-y-1">
+                        <span className="text-[8px] font-mono text-gray-400 uppercase font-bold block">
+                          Verified Grounding Sources:
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {msg.sources.map((src, sIdx) => (
+                            <a
+                              key={sIdx}
+                              href={src.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[8px] font-mono text-[#8e7135] bg-amber-50 hover:bg-[#FAF0DD] px-1.5 py-0.5 rounded border border-[#C5A059]/30 flex items-center gap-1 truncate max-w-[200px]"
+                              title={src.title}
+                            >
+                              <ExternalLink size={8} />
+                              {src.title}
+                            </a>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -579,7 +686,7 @@ export default function AIAssistant() {
                 {chatting && (
                   <div className="bg-gray-50 border border-gray-250 self-start p-3 text-xs text-gray-400 rounded-xl flex items-center gap-2 font-mono font-bold animate-pulse">
                     <BrainCircuit size={14} className="animate-spin text-[#C5A059]" />
-                    Connecting server-side advisory nodes...
+                    {useSearchGrounding ? "Querying Google Search & synthesising grounding data..." : "Connecting server-side advisory nodes..."}
                   </div>
                 )}
               </div>
@@ -590,7 +697,7 @@ export default function AIAssistant() {
                   type="text"
                   value={chatInput}
                   disabled={chatting}
-                  placeholder="Ask about shade layout ratios, coffee variety selection, or Fairtrade auditing indexes..."
+                  placeholder="Ask about live C-Market prices, harvest outlooks, shade layout ratios, or varieties..."
                   onChange={(e) => setChatInput(e.target.value)}
                   className="flex-1 bg-gray-50 border border-gray-300 rounded-lg px-3 text-xs font-sans text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#C5A059] focus:bg-white font-medium"
                 />
@@ -603,6 +710,136 @@ export default function AIAssistant() {
                 </button>
               </form>
             </div>
+          </div>
+        )}
+
+        {/* TAB 4: REAL-TIME GOOGLE SEARCH GROUNDING INTEL */}
+        {activeTab === "searchIntel" && (
+          <div className="space-y-6 text-left">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-150 pb-4">
+              <div>
+                <div className="flex items-center gap-1.5 text-[#C5A059] mb-1 font-bold">
+                  <Globe size={16} />
+                  <span className="text-[10px] uppercase font-mono tracking-wider">Live Grounded Research</span>
+                </div>
+                <h3 className="text-base font-bold text-gray-900 font-sans">Google Search Grounded Coffee Intelligence</h3>
+                <p className="text-xs text-gray-500 font-medium">
+                  Real-time market indices, ICO composite updates, regional weather advisories, and certified Fairtrade pricing powered by Google Search.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-250 font-mono text-[10px] font-bold">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+                gemini-3.5-flash with googleSearch
+              </div>
+            </div>
+
+            {/* Quick Query Pills */}
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-mono font-bold text-gray-400 uppercase">One-Click Grounded Intelligence Inquiries:</span>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  "Current Arabica C-Market & Fairtrade Minimum Prices",
+                  "2026 East Africa Harvest Season Outlook & Rainfall",
+                  "Colombia & Central America Specialty Coffee Differentials",
+                  "Specialty Arabica Rust-Resistant Varietals & High-Altitude Traits"
+                ].map((prompt, pIdx) => (
+                  <button
+                    key={pIdx}
+                    onClick={() => {
+                      setIntelQuery(prompt);
+                      runSearchIntel(prompt);
+                    }}
+                    disabled={intelLoading}
+                    className="text-xs px-3 py-1.5 rounded-xl border border-gray-250 bg-[#F8F7F4] hover:bg-white text-gray-700 font-semibold cursor-pointer transition-all hover:border-[#C5A059]/40 hover:text-[#8e7135] disabled:opacity-50"
+                  >
+                    ⚡ {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Search Form */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                runSearchIntel();
+              }}
+              className="flex gap-2"
+            >
+              <input
+                type="text"
+                value={intelQuery}
+                placeholder="Enter custom coffee market or agro-climatology question for Google Search Grounding..."
+                onChange={(e) => setIntelQuery(e.target.value)}
+                className="flex-1 bg-gray-50 border border-gray-300 rounded-xl px-3.5 py-2 text-xs font-sans text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#C5A059] focus:bg-white font-medium"
+              />
+              <button
+                type="submit"
+                disabled={intelLoading}
+                className="bg-[#3D5A40] hover:bg-[#2F4632] text-white px-5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all disabled:opacity-50 shadow-sm"
+              >
+                <Search size={14} />
+                {intelLoading ? "Grounding..." : "Search Web"}
+              </button>
+            </form>
+
+            {/* Result Area */}
+            {intelLoading && (
+              <div className="p-8 bg-gray-50 border border-gray-200 rounded-2xl flex flex-col items-center justify-center space-y-2 text-center animate-pulse">
+                <Globe size={24} className="text-[#C5A059] animate-spin-slow" />
+                <p className="text-xs font-mono font-bold text-gray-700">Connecting to Google Search Engine...</p>
+                <p className="text-[10px] text-gray-400 font-sans">Grounding market trends and regional climate datasets with live citations.</p>
+              </div>
+            )}
+
+            {intelResult && !intelLoading && (
+              <div className="p-5 bg-white border border-gray-200 rounded-2xl shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-150 pb-3">
+                  <span className="text-xs font-bold text-[#8e7135] font-mono uppercase tracking-wider flex items-center gap-1.5">
+                    <Globe size={14} /> Grounded Intelligence Briefing
+                  </span>
+                  {intelResult.queries && intelResult.queries.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1">
+                      <span className="text-[9px] font-mono text-gray-400 font-bold uppercase">Web Queries:</span>
+                      {intelResult.queries.map((q, qIdx) => (
+                        <span key={qIdx} className="text-[8.5px] font-mono px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-semibold">
+                          "{q}"
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-xs leading-relaxed font-sans text-gray-800 space-y-2">
+                  {renderAgMarkdown(intelResult.text)}
+                </div>
+
+                {intelResult.sources && intelResult.sources.length > 0 && (
+                  <div className="pt-3 border-t border-gray-150 space-y-2">
+                    <span className="text-[9.5px] font-mono font-bold text-gray-500 uppercase tracking-wider block">
+                      Google Search Grounding Web Sources & Links:
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {intelResult.sources.map((src, sIdx) => (
+                        <a
+                          key={sIdx}
+                          href={src.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-2 px-3 rounded-xl border border-gray-200 bg-gray-50 hover:bg-[#FAF0DD] hover:border-[#C5A059]/40 flex items-center justify-between gap-2 transition-all group"
+                        >
+                          <span className="text-xs font-bold text-gray-800 group-hover:text-[#8e7135] truncate font-sans">
+                            {src.title}
+                          </span>
+                          <ExternalLink size={12} className="text-gray-400 group-hover:text-[#8e7135] shrink-0" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

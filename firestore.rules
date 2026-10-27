@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Default deny all unknown collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // User profiles
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isSignedIn() ? isOwner(userId) : true;
+      allow update: if isSignedIn() ? isOwner(userId) : true;
+      allow delete: if isSignedIn() ? isOwner(userId) : false;
+    }
+
+    // Farms (read is public for map & traceability)
+    match /farms/{farmId} {
+      allow read: if true;
+      allow create: if isSignedIn() ? request.resource.data.userId == request.auth.uid : true;
+      allow update: if isSignedIn() ? (resource.data.userId == request.auth.uid || !('userId' in resource.data)) : true;
+      allow delete: if isSignedIn() ? (resource.data.userId == request.auth.uid || !('userId' in resource.data)) : true;
+    }
+
+    // Farmers
+    match /farmers/{farmerId} {
+      allow read: if true;
+      allow create: if isSignedIn() ? request.resource.data.userId == request.auth.uid : true;
+      allow update: if isSignedIn() ? (resource.data.userId == request.auth.uid || !('userId' in resource.data)) : true;
+      allow delete: if isSignedIn() ? (resource.data.userId == request.auth.uid || !('userId' in resource.data)) : true;
+    }
+
+    // Coffee Batches (read is open for public QR code batch traceability)
+    match /coffeeBatches/{batchId} {
+      allow read: if true;
+      allow create: if isSignedIn() ? request.resource.data.userId == request.auth.uid : true;
+      allow update: if isSignedIn() ? (resource.data.userId == request.auth.uid || !('userId' in resource.data)) : true;
+      allow delete: if isSignedIn() ? (resource.data.userId == request.auth.uid || !('userId' in resource.data)) : true;
+    }
+
+    // Supply Chain Events (linked to batches)
+    match /supplyChainEvents/{eventId} {
+      allow read: if true;
+      allow create: if isSignedIn() ? request.resource.data.userId == request.auth.uid : true;
+      allow update: if isSignedIn() ? (resource.data.userId == request.auth.uid || !('userId' in resource.data)) : true;
+      allow delete: if isSignedIn() ? (resource.data.userId == request.auth.uid || !('userId' in resource.data)) : true;
+    }
+
+    // Test connection
+    match /test/{testId} {
+      allow read, write: if true;
+    }
+
+    // Blockchain Transactions (immutable audit ledger)
+    match /blockchainTransactions/{txId} {
+      allow read: if true;
+      allow create: if isSignedIn() ? request.resource.data.userId == request.auth.uid : true;
+      allow update: if false; // Immutable ledger
+      allow delete: if isSignedIn() ? (resource.data.userId == request.auth.uid || !('userId' in resource.data)) : true;
+    }
+
+    // Certifications
+    match /certifications/{certId} {
+      allow read: if true;
+      allow create: if isSignedIn() ? request.resource.data.userId == request.auth.uid : true;
+      allow update: if isSignedIn() ? (resource.data.userId == request.auth.uid || !('userId' in resource.data)) : true;
+      allow delete: if isSignedIn() ? (resource.data.userId == request.auth.uid || !('userId' in resource.data)) : true;
+    }
+  }
+}

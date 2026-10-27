@@ -3,50 +3,108 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
-import { CheckCircle2, QrCode, Search, Award, Sprout, Clipboard, AlertCircle, ShoppingCart, UserCheck, Printer } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { CheckCircle2, QrCode, Search, Award, Sprout, Clipboard, AlertCircle, ShoppingCart, UserCheck, Printer, Edit, Trash2, Plus, Clock, Shield, Sparkles, Loader2, Check } from "lucide-react";
 import { jsPDF } from "jspdf";
-import { ProcessingBatch, Farm, ProcessingMethod } from "../types";
+import { ProcessingBatch, Farm, ProcessingMethod, ProcessingStage, AuditingTransaction } from "../types";
 import { LanguageCode, translations } from "../translations";
+import { QRCodeSVG } from "qrcode.react";
+import { SupplyChainEventRecord } from "../services/firestoreService";
+import { generateEudrPdfDossier, downloadEudrGeoJson } from "../utils/eudrUtils";
 
-// Helper to simulate SVG QR-Code matrix to guarantee instant, beautiful rendering offline
-function SimulatedQr({ text }: { text: string }) {
+// Real QR code generator utility utilizing qrcode.react to verify actual coffee batch URLs
+function BatchQrCode({ 
+  lotNumber,
+  farmName,
+  onOpenPublicVerify
+}: { 
+  lotNumber: string; 
+  farmName?: string;
+  onOpenPublicVerify?: (lot: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://origina.net";
+  const verificationUrl = `${origin}/?verify=${encodeURIComponent(lotNumber)}`;
+
+  const handleCopy = () => {
+    try {
+      navigator.clipboard.writeText(verificationUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2200);
+    } catch (err) {
+      console.warn("Clipboard copy failed: ", err);
+    }
+  };
+
+  const handleDownloadSticker = () => {
+    // Generate downloadable SVG QR badge
+    const svgEl = document.getElementById(`qr-svg-${lotNumber}`);
+    if (!svgEl) return;
+    const svgData = new XMLSerializer().serializeToString(svgEl);
+    const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+    const svgUrl = URL.createObjectURL(svgBlob);
+    const downloadLink = document.createElement("a");
+    downloadLink.href = svgUrl;
+    downloadLink.download = `Origina_QR_Sticker_${lotNumber}.svg`;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+  };
+
   return (
-    <div className="p-3 bg-white rounded-xl border border-gray-200 inline-block shadow-sm animate-fade-in">
-      <svg width="112" height="112" viewBox="0 0 29 29" className="fill-[#1B1B1B]">
-        {/* Mock QR grid alignment patterns */}
-        <rect x="0" y="0" width="7" height="7" />
-        <rect x="1" y="1" width="5" height="5" fill="white" />
-        <rect x="2" y="2" width="3" height="3" />
+    <div className="p-3.5 bg-white rounded-2xl border border-gray-200 inline-block shadow-sm animate-fade-in text-center relative max-w-[210px]">
+      <div className="flex justify-center p-2 bg-white rounded-xl border border-gray-150 shadow-inner">
+        <QRCodeSVG
+          id={`qr-svg-${lotNumber}`}
+          value={verificationUrl}
+          size={120}
+          bgColor={"#ffffff"}
+          fgColor={"#1B1B1B"}
+          level={"M"}
+        />
+      </div>
+      <div className="mt-2.5 space-y-1.5">
+        <div className="text-[10px] font-mono font-bold text-gray-800 tracking-tight truncate">
+          {lotNumber}
+        </div>
         
-        <rect x="22" y="0" width="7" height="7" />
-        <rect x="23" y="1" width="5" height="5" fill="white" />
-        <rect x="24" y="2" width="3" height="3" />
-        
-        <rect x="0" y="22" width="7" height="7" />
-        <rect x="1" y="23" width="5" height="5" fill="white" />
-        <rect x="2" y="24" width="3" height="3" />
+        <div className="flex flex-col gap-1">
+          <button
+            onClick={handleCopy}
+            type="button"
+            title="Copy the unique public verification URL"
+            className="text-[9px] font-mono text-center text-[#3D5A40] hover:text-[#253927] uppercase tracking-wider font-bold border border-gray-250 bg-gray-50 px-2.5 py-1 rounded-lg cursor-pointer transition-all hover:bg-white inline-block w-full"
+          >
+            {copied ? "✓ Copied Link!" : "Copy Public URL"}
+          </button>
 
-        <rect x="3" y="9" width="3" height="1" />
-        <rect x="9" y="3" width="1" height="5" />
-        <rect x="11" y="1" width="2" height="2" />
-        <rect x="15" y="0" width="4" height="2" />
-        <rect x="20" y="10" width="2" height="2" />
-        <rect x="12" y="12" width="5" height="5" />
-        <rect x="13" y="13" width="3" height="3" fill="white" />
-        <rect x="14" y="14" width="1" height="1" />
+          <button
+            onClick={() => {
+              if (onOpenPublicVerify) {
+                onOpenPublicVerify(lotNumber);
+              } else {
+                window.location.href = `/?verify=${encodeURIComponent(lotNumber)}`;
+              }
+            }}
+            type="button"
+            className="text-[9px] font-mono text-center text-[#8e7135] hover:text-[#6e5628] uppercase tracking-wider font-bold border border-[#C5A059]/40 bg-[#FAF0DD] hover:bg-[#FDF5E6] px-2.5 py-1 rounded-lg cursor-pointer transition-all inline-block w-full"
+          >
+            View Public Portal ↗
+          </button>
 
-        <rect x="23" y="15" width="2" height="4" />
-        <rect x="19" y="19" width="4" height="2" />
-        <rect x="15" y="24" width="3" height="2" />
-        <rect x="25" y="24" width="3" height="3" />
-        <rect x="10" y="25" width="2" height="2" />
-        <rect x="18" y="13" width="4" height="1" />
-        <rect x="9" y="16" width="1" height="6" />
+          <button
+            onClick={handleDownloadSticker}
+            type="button"
+            className="text-[8px] font-mono text-gray-500 hover:text-gray-800 underline cursor-pointer text-center"
+          >
+            Download QR Sticker (.svg)
+          </button>
+        </div>
 
-        <rect x="25" y="25" width="2" height="2" fill="white" />
-      </svg>
-      <div className="text-[8px] font-mono text-center text-gray-400 mt-1 uppercase tracking-tight font-bold">Trace Code Locked</div>
+        <p className="text-[7px] font-mono text-gray-400 truncate max-w-[170px] mx-auto select-all pt-1 border-t border-gray-100">
+          {verificationUrl}
+        </p>
+      </div>
     </div>
   );
 }
@@ -55,18 +113,43 @@ interface TraceabilityCenterProps {
   batches: ProcessingBatch[];
   farms: Farm[];
   onAddBatch: (batch: ProcessingBatch) => void;
+  onUpdateBatch?: (lotNumber: string, updates: Partial<ProcessingBatch>) => Promise<void> | void;
+  onDeleteBatch?: (lotNumber: string) => Promise<void> | void;
+  supplyChainEvents?: SupplyChainEventRecord[];
+  onAddSupplyChainEvent?: (event: SupplyChainEventRecord) => Promise<void> | void;
+  blockchainTransactions?: AuditingTransaction[];
   isOffline: boolean;
   language?: LanguageCode;
+  onOpenPublicVerify?: (lot: string) => void;
+  isLoading?: boolean;
 }
 
 export default function TraceabilityCenter({
   batches,
   farms,
   onAddBatch,
+  onUpdateBatch,
+  onDeleteBatch,
+  supplyChainEvents = [],
+  onAddSupplyChainEvent,
+  blockchainTransactions = [],
   isOffline,
-  language = "en"
+  language = "en",
+  onOpenPublicVerify,
+  isLoading = false
 }: TraceabilityCenterProps) {
-  const [selectedLotNo, setSelectedLotNo] = useState<string>("LOT-ETH-2026-AA03");
+  const [selectedLotNo, setSelectedLotNo] = useState<string>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const lotParam = params.get("lot");
+      if (lotParam && batches.some(b => b.lotNumber.toUpperCase() === lotParam.toUpperCase())) {
+        return lotParam.toUpperCase();
+      }
+    } catch (e) {
+      console.warn("Failed to check query string params:", e);
+    }
+    return batches[0]?.lotNumber || "LOT-ETH-2026-AA03";
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [verifyBuyerInput, setVerifyBuyerInput] = useState("");
   const [buyerVerifiedName, setBuyerVerifiedName] = useState<string | null>(null);
@@ -89,8 +172,66 @@ export default function TraceabilityCenter({
   const [formShow, setFormShow] = useState(false);
   const [formSuccess, setFormSuccess] = useState("");
 
-  const activeBatch = batches.find(b => b.lotNumber === selectedLotNo) || batches[0] || batches[0];
-  const activeFarm = farms.find(f => f.id === activeBatch?.farmId) || farms[0];
+  // Batch Update Modal states
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<ProcessingStage>("Warehouse");
+  const [updateCuppingScore, setUpdateCuppingScore] = useState<number>(88.5);
+  const [updateBuyer, setUpdateBuyer] = useState<string>("");
+  const [updateWeight, setUpdateWeight] = useState<number>(1200);
+  const [updateMillingDate, setUpdateMillingDate] = useState<string>("");
+  const [updateExportDate, setUpdateExportDate] = useState<string>("");
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateMsg, setUpdateMsg] = useState("");
+
+  // Delete Batch Confirmation states
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Log Milestone Event Modal states
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [eventTitle, setEventTitle] = useState("");
+  const [eventStage, setEventStage] = useState("Processing");
+  const [eventLocation, setEventLocation] = useState("");
+  const [eventOperator, setEventOperator] = useState("Simon Wolde Balango");
+  const [eventDetails, setEventDetails] = useState("");
+  const [isLoggingEvent, setIsLoggingEvent] = useState(false);
+  const [eventMsg, setEventMsg] = useState("");
+
+  useEffect(() => {
+    if (batches.length > 0) {
+      const exists = batches.some(b => 
+        b.lotNumber.toUpperCase() === selectedLotNo.toUpperCase() ||
+        (b.id && b.id.toUpperCase() === selectedLotNo.toUpperCase())
+      );
+      if (!exists && batches[0]) {
+        setSelectedLotNo(batches[0].lotNumber);
+      }
+    }
+  }, [batches]);
+
+  const activeBatch = batches.find(b => 
+    b.lotNumber.toUpperCase() === selectedLotNo.toUpperCase() || 
+    (b.id && b.id.toUpperCase() === selectedLotNo.toUpperCase())
+  ) || batches[0] || null;
+  const activeFarm = farms.find(f => f.id === activeBatch?.farmId) || farms[0] || null;
+
+  // Filter supply chain events for current lot / batch ID
+  const batchEvents = activeBatch 
+    ? supplyChainEvents.filter(e => 
+        (e.lotNumber && activeBatch.lotNumber && e.lotNumber.toUpperCase() === activeBatch.lotNumber.toUpperCase()) || 
+        (e.batchId && activeBatch.lotNumber && e.batchId.toUpperCase() === activeBatch.lotNumber.toUpperCase()) || 
+        (activeBatch.id && e.batchId && e.batchId.toUpperCase() === activeBatch.id.toUpperCase())
+      )
+    : [];
+
+  // Filter blockchain audit transactions for current lot / batch ID
+  const batchTransactions = activeBatch
+    ? blockchainTransactions.filter(t => 
+        (t.lotNumber && activeBatch.lotNumber && t.lotNumber.toUpperCase() === activeBatch.lotNumber.toUpperCase()) ||
+        (t.batchId && activeBatch.lotNumber && t.batchId.toUpperCase() === activeBatch.lotNumber.toUpperCase()) ||
+        (activeBatch.id && t.batchId && t.batchId.toUpperCase() === activeBatch.id.toUpperCase())
+      )
+    : [];
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,6 +280,107 @@ export default function TraceabilityCenter({
       setFormSuccess("");
       setFormShow(false);
     }, 4000);
+  };
+
+  const openUpdateModal = () => {
+    if (!activeBatch) return;
+    setUpdateStatus((activeBatch.status as ProcessingStage) || "Warehouse");
+    setUpdateCuppingScore(activeBatch.cuppingScore || 88.5);
+    setUpdateBuyer(activeBatch.buyerName || "");
+    setUpdateWeight(activeBatch.weightKg || 1200);
+    setUpdateMillingDate(activeBatch.dryMillDate || "");
+    setUpdateExportDate(activeBatch.exportDate || "");
+    setUpdateMsg("");
+    setShowUpdateModal(true);
+  };
+
+  const handleUpdateBatchSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeBatch || !onUpdateBatch) return;
+    setIsUpdating(true);
+    setUpdateMsg("");
+    try {
+      const updates: Partial<ProcessingBatch> = {
+        status: updateStatus,
+        cuppingScore: parseFloat(updateCuppingScore.toString()),
+        buyerName: updateBuyer.trim() || undefined,
+        weightKg: parseFloat(updateWeight.toString()),
+        dryMillDate: updateMillingDate || undefined,
+        exportDate: updateExportDate || undefined
+      };
+      await onUpdateBatch(activeBatch.lotNumber, updates);
+      setUpdateMsg("Batch updated in Firestore successfully!");
+      setTimeout(() => {
+        setShowUpdateModal(false);
+        setUpdateMsg("");
+      }, 1500);
+    } catch (err: any) {
+      setUpdateMsg(err.message || "Failed to update batch in Firestore");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDeleteBatchSubmit = async () => {
+    if (!activeBatch || !onDeleteBatch) return;
+    setIsDeleting(true);
+    try {
+      await onDeleteBatch(activeBatch.lotNumber);
+      setShowDeleteConfirm(false);
+      // Select another remaining batch
+      const remaining = batches.filter(b => b.lotNumber !== activeBatch.lotNumber);
+      if (remaining.length > 0) {
+        setSelectedLotNo(remaining[0].lotNumber);
+      }
+    } catch (err: any) {
+      alert("Error deleting batch: " + (err.message || err));
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const openEventModal = () => {
+    if (!activeBatch) return;
+    setEventTitle(`Quality Inspection (${activeBatch.lotNumber})`);
+    setEventStage(activeBatch.status || "Processing");
+    setEventLocation(activeBatch.washingStation || activeFarm?.name || "Cooperative Wet Mill");
+    setEventOperator("Simon Wolde Balango");
+    setEventDetails(`Milestone inspection logged for batch ${activeBatch.lotNumber}. Verification pass.`);
+    setEventMsg("");
+    setShowEventModal(true);
+  };
+
+  const handleLogEventSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeBatch || !onAddSupplyChainEvent) return;
+    if (!eventTitle.trim()) return;
+
+    setIsLoggingEvent(true);
+    setEventMsg("");
+    try {
+      const newEvent: SupplyChainEventRecord = {
+        id: `evt-${activeBatch.lotNumber}-${Date.now()}`,
+        lotNumber: activeBatch.lotNumber,
+        batchId: activeBatch.id || activeBatch.lotNumber,
+        title: eventTitle.trim(),
+        stage: eventStage,
+        location: eventLocation.trim() || "Field Site",
+        timestamp: new Date().toISOString(),
+        details: eventDetails.trim() || "Milestone progress recorded in Firestore ledger.",
+        operator: eventOperator.trim() || "Supply Chain Coordinator",
+        userId: ""
+      };
+      await onAddSupplyChainEvent(newEvent);
+      setEventMsg("Event logged to Firestore supplyChainEvents successfully!");
+      setTimeout(() => {
+        setShowEventModal(false);
+        setEventMsg("");
+      }, 1500);
+    } catch (err: any) {
+      setEventMsg(err.message || "Failed to record event");
+    } finally {
+      setIsLoggingEvent(false);
+    }
   };
 
   const autofillLotName = () => {
@@ -541,14 +783,59 @@ export default function TraceabilityCenter({
                   {t.auditTitle}: {activeBatch.lotNumber}
                 </h3>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs px-3 py-1 rounded-lg bg-[#F8F7F4] text-gray-650 font-sans border border-gray-200 flex items-center gap-1 font-semibold">
                   <Award size={14} className="text-[#C5A059]" />
-                  {t.scaleMetric}: {activeBatch.cuppingScore} (Excellent)
+                  {t.scaleMetric}: {activeBatch.cuppingScore}
                 </span>
                 <span className="text-xs px-3 py-1 rounded-lg bg-[#FAF0DD] text-[#C5A059] font-mono font-bold uppercase border border-[#C5A059]/30">
                   {activeBatch.status}
                 </span>
+
+                {onUpdateBatch && (
+                  <button
+                    onClick={openUpdateModal}
+                    id="btn-edit-batch-firestore"
+                    className="text-xs px-2.5 py-1 rounded-lg bg-white border border-gray-300 text-gray-700 hover:text-black hover:border-gray-400 font-semibold flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                    title="Update batch details and stage in Firestore"
+                  >
+                    <Edit size={13} className="text-[#C5A059]" />
+                    Edit Lot
+                  </button>
+                )}
+
+                <button
+                  onClick={() => generateEudrPdfDossier(farms, activeBatch)}
+                  className="text-xs px-2.5 py-1 rounded-lg bg-[#003399] text-white hover:bg-[#002266] font-semibold flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                  title="Download EUDR Regulation (EU) 2023/1115 Due Diligence Statement (PDF) for this batch"
+                >
+                  <Shield size={13} className="text-[#FFCC00]" />
+                  EUDR Dossier
+                </button>
+
+                {onAddSupplyChainEvent && (
+                  <button
+                    onClick={openEventModal}
+                    id="btn-log-event-firestore"
+                    className="text-xs px-2.5 py-1 rounded-lg bg-[#3D5A40] text-white hover:bg-[#2F4632] font-semibold flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                    title="Log a new supply-chain milestone to Firestore"
+                  >
+                    <Plus size={13} />
+                    Log Event
+                  </button>
+                )}
+
+                {onDeleteBatch && (
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    id="btn-delete-batch-firestore"
+                    className="text-xs px-2.5 py-1 rounded-lg bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                    title="Delete batch document from Firestore"
+                  >
+                    <Trash2 size={13} />
+                    Delete
+                  </button>
+                )}
               </div>
             </div>
 
@@ -663,6 +950,106 @@ export default function TraceabilityCenter({
             </div>
           </div>
 
+          {/* FIRESTORE PERSISTENT SUPPLY-CHAIN EVENTS & AUDIT LEDGER */}
+          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-6 text-[#2D2926]">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-gray-150 pb-4">
+              <div>
+                <span className="text-[10px] font-mono text-[#3D5A40] uppercase font-bold tracking-wider flex items-center gap-1.5">
+                  <Clock size={13} /> Firestore Supply Chain Ledger
+                </span>
+                <h4 className="text-base font-bold text-gray-900 mt-0.5">
+                  Lifecycle Milestones for Lot: {activeBatch.lotNumber}
+                </h4>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-gray-100 text-gray-600 font-bold">
+                  {batchEvents.length} Recorded Milestone{batchEvents.length === 1 ? "" : "s"}
+                </span>
+                {onAddSupplyChainEvent && (
+                  <button
+                    onClick={openEventModal}
+                    className="text-xs px-3 py-1 bg-[#3D5A40] hover:bg-[#2F4632] text-white rounded-lg font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Plus size={13} /> Append Milestone
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {batchEvents.length > 0 ? (
+              <div className="space-y-3">
+                {batchEvents.map((evt, idx) => (
+                  <div key={evt.id || idx} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/70 hover:bg-white hover:border-gray-300 transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-left">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-gray-900">{evt.title}</span>
+                        <span className="text-[9px] font-mono uppercase px-2 py-0.5 rounded bg-[#FAF0DD] text-[#8e7135] font-bold border border-[#C5A059]/30">
+                          {evt.stage}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600 font-sans">{evt.details}</p>
+                      <div className="flex flex-wrap items-center gap-3 text-[10px] font-mono text-gray-400 font-medium">
+                        <span>📍 {evt.location}</span>
+                        <span>👤 Operator: {evt.operator}</span>
+                        <span>🕒 {new Date(evt.timestamp).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    <span className="text-[9px] font-mono text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200 font-bold shrink-0">
+                      ✓ Firestore Verified
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-8 text-center text-gray-400 font-sans text-xs bg-gray-50/50 rounded-xl border border-dashed border-gray-200 space-y-2">
+                <Clock className="mx-auto text-gray-300" size={24} />
+                <p>No milestone events recorded yet for this batch.</p>
+                {onAddSupplyChainEvent && (
+                  <button
+                    onClick={openEventModal}
+                    className="text-xs text-[#3D5A40] underline font-bold cursor-pointer"
+                  >
+                    Click here to log the first milestone event
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* ASSOCIATED BLOCKCHAIN TRANSACTIONS */}
+            {batchTransactions.length > 0 && (
+              <div className="pt-4 border-t border-gray-150 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono text-[#C5A059] uppercase font-bold tracking-wider flex items-center gap-1.5">
+                    <Shield size={13} /> Associated Blockchain Transactions ({batchTransactions.length})
+                  </span>
+                  <span className="text-[9px] font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-250 font-bold">
+                    Immutable Fairtrade Audit
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {batchTransactions.map((tx, idx) => (
+                    <div key={tx.id || idx} className="p-3 bg-[#FEF9EC] border border-[#C5A059]/30 rounded-xl text-xs space-y-1.5 text-left font-sans">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1">
+                        <span className="font-bold text-gray-900">Auditor: {tx.auditorName} ({tx.cooperativeId})</span>
+                        <span className="text-[10px] font-mono text-[#8e7135] font-bold">
+                          Score: {tx.auditScore}/100 • Base: ${tx.basePricePaidUSD}/lb • Premium: +${tx.premiumPaidUSD}/lb
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-600">{tx.inspectorComments}</p>
+                      <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-[#C5A059]/20 text-[9px] font-mono text-gray-500">
+                        {tx.childLaborFree && <span className="text-emerald-700 font-bold">✓ Child-Labor Free</span>}
+                        {tx.safeWorkingConditions && <span className="text-emerald-700 font-bold">✓ Safe Conditions</span>}
+                        {tx.organicPractice && <span className="text-emerald-700 font-bold">✓ Organic</span>}
+                        {tx.forestPreserved && <span className="text-emerald-700 font-bold">✓ Forest Preserved</span>}
+                        {tx.txHash && <span className="truncate max-w-[200px] text-gray-400">Hash: {tx.txHash}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* PRINTABLE ORIGIN CERTIFICATE CARD */}
           <div className="p-8 bg-[#FDFCFB] border-2 border-dashed border-[#C5A059]/30 rounded-3xl relative overflow-hidden text-gray-750 font-sans shadow">
             {/* Watermark in background */}
@@ -749,7 +1136,7 @@ export default function TraceabilityCenter({
 
               {/* QR lock visual stamp */}
               <div className="flex flex-col items-center justify-center space-y-3 bg-[#FAF0DD]/30 p-4 rounded-2xl border border-[#C5A059]/20">
-                <SimulatedQr text={`https://origina.net/trace/${activeBatch.lotNumber}`} />
+                <BatchQrCode lotNumber={activeBatch.lotNumber} farmName={activeFarm?.name} onOpenPublicVerify={onOpenPublicVerify} />
                 <div className="text-center">
                   <p className="text-[10px] font-mono text-gray-500 font-semibold">blockchain audit block lock</p>
                   <p className="text-[8px] font-mono text-emerald-700 uppercase mt-0.5 font-bold">Cryptographically Secured</p>
@@ -772,6 +1159,270 @@ export default function TraceabilityCenter({
         <div className="lg:col-span-3 py-16 text-gray-400 text-center font-sans font-bold">
           <QrCode className="mx-auto text-gray-300 animate-pulse mb-3" size={48} />
           <p>No active lot targets found. Please select or register a batch.</p>
+        </div>
+      )}
+
+      {/* MODAL 1: UPDATE COFFEE BATCH IN FIRESTORE */}
+      {showUpdateModal && activeBatch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 space-y-4 text-left">
+            <div className="flex justify-between items-center border-b border-gray-150 pb-3">
+              <div>
+                <span className="text-[10px] font-mono text-[#C5A059] uppercase font-bold">Firestore Database Update</span>
+                <h3 className="text-base font-bold text-gray-900">Update Lot: {activeBatch.lotNumber}</h3>
+              </div>
+              <button
+                onClick={() => setShowUpdateModal(false)}
+                className="text-gray-400 hover:text-gray-600 text-sm font-bold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateBatchSubmit} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-gray-600 font-bold block mb-1">Supply Chain Status</label>
+                  <select
+                    value={updateStatus}
+                    onChange={(e) => setUpdateStatus(e.target.value as ProcessingStage)}
+                    className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2 font-medium focus:bg-white outline-none"
+                  >
+                    <option value="Harvested">Harvested</option>
+                    <option value="Processing">Processing / Wet Mill</option>
+                    <option value="Drying">Moisture Curing / Drying</option>
+                    <option value="Dry Mill">Dry Mill Grading</option>
+                    <option value="Warehouse">Warehouse Storage</option>
+                    <option value="Exported">Exported / Vessel Dispatched</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-gray-600 font-bold block mb-1">SCA Cupping Score (0-100)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="70"
+                    max="100"
+                    value={updateCuppingScore}
+                    onChange={(e) => setUpdateCuppingScore(parseFloat(e.target.value))}
+                    className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2 font-mono focus:bg-white outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-gray-600 font-bold block mb-1">Gross Weight (kg)</label>
+                  <input
+                    type="number"
+                    value={updateWeight}
+                    onChange={(e) => setUpdateWeight(parseFloat(e.target.value))}
+                    className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2 font-mono focus:bg-white outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-600 font-bold block mb-1">Assigned Buyer</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Royal Coffee Importers Inc."
+                    value={updateBuyer}
+                    onChange={(e) => setUpdateBuyer(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2 font-medium focus:bg-white outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-gray-600 font-bold block mb-1">Dry Milling Date</label>
+                  <input
+                    type="date"
+                    value={updateMillingDate}
+                    onChange={(e) => setUpdateMillingDate(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2 font-mono focus:bg-white outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-600 font-bold block mb-1">Export Dispatch Date</label>
+                  <input
+                    type="date"
+                    value={updateExportDate}
+                    onChange={(e) => setUpdateExportDate(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2 font-mono focus:bg-white outline-none"
+                  />
+                </div>
+              </div>
+
+              {updateMsg && (
+                <p className={`p-2 rounded font-mono text-[11px] text-center font-bold ${
+                  updateMsg.includes("successfully") ? "bg-emerald-50 text-emerald-800 border border-emerald-250" : "bg-red-50 text-red-700 border border-red-200"
+                }`}>
+                  {updateMsg}
+                </p>
+              )}
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-gray-150">
+                <button
+                  type="button"
+                  onClick={() => setShowUpdateModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-600 font-bold hover:bg-gray-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="px-5 py-2 bg-[#3D5A40] hover:bg-[#2F4632] text-white rounded-lg font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isUpdating ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  {isUpdating ? "Updating in Firestore..." : "Save Changes to Firestore"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: DELETE BATCH CONFIRMATION */}
+      {showDeleteConfirm && activeBatch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-red-200 space-y-4 text-left">
+            <div className="flex items-center gap-2.5 text-red-600 border-b border-gray-150 pb-3">
+              <Trash2 size={20} />
+              <h3 className="text-base font-bold text-gray-900">Delete Coffee Batch</h3>
+            </div>
+            <p className="text-xs text-gray-600 leading-relaxed font-sans">
+              Are you sure you want to permanently delete <strong>{activeBatch.lotNumber}</strong> from the 
+              Firestore <code className="font-mono text-red-700 bg-red-50 px-1 py-0.5 rounded">coffeeBatches</code> collection?
+              This operation cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-600 font-bold hover:bg-gray-50 cursor-pointer text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteBatchSubmit}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold flex items-center gap-1.5 cursor-pointer text-xs disabled:opacity-50"
+              >
+                {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                {isDeleting ? "Deleting..." : "Permanently Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: LOG SUPPLY CHAIN MILESTONE EVENT TO FIRESTORE */}
+      {showEventModal && activeBatch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 space-y-4 text-left">
+            <div className="flex justify-between items-center border-b border-gray-150 pb-3">
+              <div>
+                <span className="text-[10px] font-mono text-[#3D5A40] uppercase font-bold">New Supply Chain Milestone</span>
+                <h3 className="text-base font-bold text-gray-900">Append Event for: {activeBatch.lotNumber}</h3>
+              </div>
+              <button
+                onClick={() => setShowEventModal(false)}
+                className="text-gray-400 hover:text-gray-600 text-sm font-bold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleLogEventSubmit} className="space-y-3.5 text-xs">
+              <div>
+                <label className="text-gray-600 font-bold block mb-1">Event Title</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Aerobic Fermentation Complete"
+                  value={eventTitle}
+                  onChange={(e) => setEventTitle(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2 font-medium focus:bg-white outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-gray-600 font-bold block mb-1">Process Stage</label>
+                  <select
+                    value={eventStage}
+                    onChange={(e) => setEventStage(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2 font-medium focus:bg-white outline-none"
+                  >
+                    <option value="Harvested">Harvested</option>
+                    <option value="Washing">Washing / Wet Mill</option>
+                    <option value="Fermenting">Fermenting</option>
+                    <option value="Drying">Raised Beds Drying</option>
+                    <option value="Grading">Dry Mill Grading</option>
+                    <option value="Warehouse">Warehouse Acceptance</option>
+                    <option value="Dispatched">Dispatched to Port</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-gray-600 font-bold block mb-1">Responsible Operator</label>
+                  <input
+                    type="text"
+                    required
+                    value={eventOperator}
+                    onChange={(e) => setEventOperator(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2 font-medium focus:bg-white outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-gray-600 font-bold block mb-1">Physical Milestone Location</label>
+                <input
+                  type="text"
+                  required
+                  value={eventLocation}
+                  onChange={(e) => setEventLocation(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2 font-medium focus:bg-white outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-gray-600 font-bold block mb-1">Milestone Observations & Measurements</label>
+                <textarea
+                  rows={3}
+                  value={eventDetails}
+                  onChange={(e) => setEventDetails(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2 font-medium focus:bg-white outline-none"
+                />
+              </div>
+
+              {eventMsg && (
+                <p className={`p-2 rounded font-mono text-[11px] text-center font-bold ${
+                  eventMsg.includes("successfully") ? "bg-emerald-50 text-emerald-800 border border-emerald-250" : "bg-red-50 text-red-700 border border-red-200"
+                }`}>
+                  {eventMsg}
+                </p>
+              )}
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-gray-150">
+                <button
+                  type="button"
+                  onClick={() => setShowEventModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-600 font-bold hover:bg-gray-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLoggingEvent}
+                  className="px-5 py-2 bg-[#3D5A40] hover:bg-[#2F4632] text-white rounded-lg font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isLoggingEvent ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  {isLoggingEvent ? "Writing to Firestore..." : "Record Milestone in Firestore"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
